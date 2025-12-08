@@ -1,0 +1,19 @@
+{
+    "name": "eventpulse",
+    "version": "1.0.0",
+    "description": "Event discovery platform with affiliate monetization",
+    "private": true,
+    "scripts": {
+        "dev": "concurrently --kill-others-on-fail \"npm run backend\" \"npm run frontend\"",
+        "backend": ".venv\\Scripts\\python.exe -m uvicorn api.main:app --reload --port 8000",
+        "frontend": "cd src/ui/frontend && npm start",
+        "test": ".venv\\Scripts\\python.exe -m pytest tests/ -v",
+        "test:frontend": "cd src/ui/frontend && npm test"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}
