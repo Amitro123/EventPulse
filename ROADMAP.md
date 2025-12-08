@@ -84,6 +84,23 @@ via ticket providers, hotels, and flights.
 
 ---
 
+## Phase 2.5 – Refactoring & Stability (New)
+
+**Goal:** Address Code Review findings and prepare for scale.
+
+### Backend
+- [ ] **Critical**: Fix memory leak in `api/routes/events.py` (replace in-memory `_events_cache`).
+- [ ] Refactor: Extract `_parse_ticketmaster_event` in `api/collectors/ticketmaster.py` to reduce duplication.
+
+### Frontend
+- [ ] Refactor `App.js` into smaller components (`Header`, `SearchForm`, `EventList`, `PackageModal`).
+- [ ] Extract API calls to `src/services/api.js`.
+
+### Testing
+- [ ] Add frontend component tests (Jest/React Testing Library).
+
+---
+
 ## Phase 3 – Multi-Source Collector & Scale
 
 **Goal:** Improve coverage and robustness.
