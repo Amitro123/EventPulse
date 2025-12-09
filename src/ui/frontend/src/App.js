@@ -30,6 +30,20 @@ function PackageModal({ event, onClose }) {
                 <h2 className="modal-title">📦 Event Package</h2>
                 <h3 className="modal-event-name">{event.text}</h3>
 
+                {/* Event Details in Modal */}
+                <div className="modal-event-details">
+                    {event.min_price && (
+                        <p className="modal-price">
+                            💰 From {event.currency} {event.min_price}
+                        </p>
+                    )}
+                    {event.venue_lat && event.venue_lng && (
+                        <p className="modal-coords">
+                            📍 Coordinates: {event.venue_lat}, {event.venue_lng}
+                        </p>
+                    )}
+                </div>
+
                 {loading && (
                     <div className="modal-loading">
                         <span className="loading-spinner-inline"></span>
@@ -117,8 +131,20 @@ function EventCard({ event }) {
                             })}</span>
                         </div>
                     </div>
-                    {event.price_range && (
+                    {/* Price Display */}
+                    {event.min_price !== null && event.min_price !== undefined ? (
+                        <div className="event-price">
+                            From {event.currency} {event.min_price}{event.max_price && event.max_price !== event.min_price ? ` - ${event.max_price}` : ''}
+                        </div>
+                    ) : event.price_range ? (
                         <div className="event-price">{event.price_range}</div>
+                    ) : null}
+
+                    {/* Location Indicator */}
+                    {event.venue_lat && event.venue_lng && (
+                        <div className="location-indicator" title="Map location available">
+                            📍 Map Available
+                        </div>
                     )}
                     <div className="event-buttons">
                         <a

@@ -25,6 +25,12 @@ class TestHealthEndpoint:
 class TestEventsEndpoint:
     """Tests for events search endpoint."""
     
+    @pytest.fixture(autouse=True)
+    def mock_api_key(self):
+        """Force mock mode for these tests."""
+        with patch("api.config.TICKETMASTER_API_KEY", "test"):
+            yield
+    
     def test_events_requires_date(self):
         """Events endpoint should require date parameter."""
         response = client.get("/api/events?city=Tel%20Aviv")
@@ -101,15 +107,115 @@ class TestTicketmasterCollector:
     async def test_collect_events_with_api_error(self):
         """Collector should handle API errors gracefully."""
         with patch("api.collectors.ticketmaster.config.TICKETMASTER_API_KEY", "test-key"):
-            with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
-                mock_get.side_effect = Exception("API Error")
+            with patch("httpx.AsyncClient") as mock_client_cls:
+                mock_client = mock_client_cls.return_value
+                mock_client.__aenter__.return_value = mock_client
+                # client.get must be awaitable
+                mock_client.get = AsyncMock(side_effect=Exception("API Error"))
+                
                 events = await collect_events("2025-12-15", "Tel Aviv", "music")
                 # Should return empty list on error
                 assert events == []
 
+    @pytest.mark.asyncio
+    async def test_parsing_price_and_location(self):
+        """Collector should correctly parse price ranges and venue location."""
+        mock_response = {
+            "_embedded": {
+                "events": [
+                    {
+                        "id": "test-1",
+                        "name": "Test Event",
+                        "url": "http://ticketmaster.com/event/1",
+                        "dates": {"start": {"localDate": "2025-12-15"}},
+                        "priceRanges": [
+                            {"min": 50.0, "max": 150.0, "currency": "USD"}
+                        ],
+                        "_embedded": {
+                            "venues": [
+                                {
+                                    "name": "Test Venue",
+                                    "city": {"name": "Test City"},
+                                    "location": {"latitude": "34.05", "longitude": "-118.25"}
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+
+        with patch("api.collectors.ticketmaster.config.TICKETMASTER_API_KEY", "test-key"):
+            with patch("httpx.AsyncClient") as mock_client_cls:
+                mock_client = mock_client_cls.return_value
+                mock_client.__aenter__.return_value = mock_client
+                mock_client.get = AsyncMock()
+                mock_client.get.return_value.status_code = 200
+                mock_client.get.return_value.json.return_value = mock_response
+                
+                events = await collect_events("2025-12-15", "Test City")
+                
+                assert len(events) == 1
+                e = events[0]
+                assert e.min_price == 50.0
+                assert e.max_price == 150.0
+                assert e.currency == "USD"
+                assert e.venue_lat == 34.05
+                assert e.venue_lng == -118.25
+                assert e.price_range == "$50 - $150"
+
+    @pytest.mark.asyncio
+    async def test_parsing_missing_fields_gracefully(self):
+        """Collector should handle missing price/location fields gracefully."""
+        mock_response = {
+            "_embedded": {
+                "events": [
+                    {
+                        "id": "test-2",
+                        "name": "Event No Data",
+                        "url": "http://example.com",
+                        "dates": {"start": {"localDate": "2025-12-15"}},
+                        # No priceRanges
+                        "_embedded": {
+                            "venues": [
+                                {
+                                    "name": "Venue No Loc",
+                                    "city": {"name": "City"},
+                                    # No location
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+
+        with patch("api.collectors.ticketmaster.config.TICKETMASTER_API_KEY", "test-key"):
+            with patch("httpx.AsyncClient") as mock_client_cls:
+                mock_client = mock_client_cls.return_value
+                mock_client.__aenter__.return_value = mock_client
+                mock_client.get = AsyncMock()
+                mock_client.get.return_value.status_code = 200
+                mock_client.get.return_value.json.return_value = mock_response
+                
+                events = await collect_events("2025-12-15")
+                
+                assert len(events) == 1
+                e = events[0]
+                assert e.min_price is None
+                assert e.max_price is None
+                assert e.venue_lat is None
+                assert e.venue_lng is None
+
 
 class TestByArtistEndpoint:
     """Tests for events by-artist search endpoint."""
+    
+    @pytest.fixture(autouse=True)
+    def mock_api_key(self):
+        """Force mock mode for these tests."""
+        with patch("api.config.TICKETMASTER_API_KEY", "test"):
+            yield
     
     def test_by_artist_requires_artist(self):
         """By-artist endpoint should require artist parameter."""

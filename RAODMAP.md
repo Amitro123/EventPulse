@@ -1,16 +1,17 @@
-# EventPulse – Roadmap
+# Secreticket / EventPulse – Roadmap
 
-EventPulse is an event discovery platform (concerts + sports) with affiliate monetization
-via ticket providers, hotels, and flights.
+Secreticket is an event discovery and trip‑around‑the‑ticket platform:
+find concerts and sports events, then instantly build a full package
+(tickets, hotels, flights, maps, and context) around them.
 
 ## Phase 0 – Current Status (MVP v0)
 
 - [x] Backend service with `/api/events` endpoint (Ticketmaster-based search)
 - [x] Basic event models (EventMention)
 - [x] Mock data mode when Ticketmaster API key is missing
-- [x] Live Ticketmaster data when key is present
-- [x] React frontend: simple search UI (date + city)
-- [x] Basic tests for events collector and endpoint
+- [x] Live Ticketmaster data when key is present [attached_file:1][web:41]
+- [x] React frontend: search UI (date + city, artist)
+- [x] Basic tests for events collector and endpoints
 
 ---
 
@@ -21,110 +22,344 @@ via ticket providers, hotels, and flights.
 ### Backend
 
 - [x] Relax required query params on `/api/events`
-  - `city` and `category` become optional (only `date` required).
-  - Collector should omit empty params when calling Ticketmaster.
+  - `city` and `category` optional (only `date` required).
+  - Collector omits empty params when calling Ticketmaster. [attached_file:1][web:41]
 - [x] New endpoint: `GET /api/events/by-artist`
   - Required: `artist`
   - Optional: `date_from`, `date_to`, `country_code`, `limit`
-  - Uses Ticketmaster `keyword` search under the hood.
+  - Uses Ticketmaster `keyword` search under the hood. [attached_file:1][web:41]
 - [x] Validate date parameters with `YYYY-MM-DD` pattern and clear error messages.
 
 ### Frontend
 
-- [x] Add tab / toggle for **“Search by Date & City”** vs **“Search by Artist”**
-- [x] Search by artist form:
-  - `artist` input (autocomplete later)
-  - optional `date_from`, `date_to`
-- [x] Display loading / empty states and error messages.
+- [x] Tabs for **“Search by Date & City”** vs **“Search by Artist”**
+- [x] Artist search form with optional date range and country
+- [x] Loading / empty / error states
 
 ### Testing
 
-- [x] Tests for `/api/events` with:
-  - only `date`
-  - `date + city`
-  - `date + city + category`
-- [x] Tests for `/api/events/by-artist` with:
-  - artist only
-  - artist + date range
+- [x] Tests for `/api/events` (date only, date+city, date+city+category)
+- [x] Tests for `/api/events/by-artist` (artist only, with date range)
 
 ---
 
-## Phase 2 – Affiliate & Packages (In Progress)
-
-**Goal:** Turn searches into monetizable clicks.
-
-### Backend
-
-- [ ] Extend event model with:
-  - `min_price`, `max_price`, `currency`
-  - `venue_lat`, `venue_lng`
-- [x] New endpoint: `GET /api/events/{event_id}/package`
-  - Returns:
-    - event details
-    - pre-built Booking.com deep link near venue
-    - [ ] pre-built Skyscanner flight search link (future)
-- [x] Config:
   - [x] `BOOKING_AFFILIATE_ID`
-  - [ ] `SKYSCANNER_PARTNER_ID` (future)
+  - [ ] `SKYSCANNER_PARTNER_ID` (future flights)
 
 ### Frontend
 
-- [x] On event card add **“View Package”** button.
+- [x] Event card includes **“View Package”** button
+- [ ] Show price line when available:
+  - `From {currency} {min_price}` or `{currency} {min_price}–{max_price}`
+- [ ] Show basic venue/location hint (e.g. “Location available” / coords text)
 - [x] Package modal/page:
-  - Event info
+  - Event info (with price when available)
   - Buttons:
     - “Hotels near venue” (Booking link)
-    - “Flights to city” (Skyscanner link)
+    - “Flights to city” (Skyscanner link placeholder)
     - “Buy tickets” (ticket URL)
 
 ### Testing
 
-- [x] Unit tests for link builders (Booking).
-- [ ] Unit tests for Skyscanner link builder (future).
-- [x] Snapshot test for package response structure.
+- [x] Unit tests for Booking link builder
+- [ ] Unit tests for Skyscanner link builder (future)
+- [x] Snapshot test for package response shape
+- [ ] Unit tests for parsing `priceRanges` and `location` into new fields
 
 ---
 
-## Phase 3 – Multi-Source Collector & Scale
+## Phase 3 – Multi‑Source Tickets & Scale
 
-**Goal:** Improve coverage and robustness.
+**Goal:** Broader coverage and smarter provider selection.
 
 ### Backend
 
 - [ ] Introduce `MultiCollector` abstraction:
-  - Primary: Ticketmaster
-  - Secondary: additional providers (Bandsintown, sports API, etc.)
-- [ ] Simple in-memory / Redis cache for event queries:
-  - cache key: `(date, city, category, artist)`
-  - TTL: e.g. 6–24 hours
+  - Primary: Ticketmaster Discovery API [attached_file:1][web:41]
+  - Secondary providers:
+    - [ ] Viagogo API (concerts + sports) [web:60][web:63][web:67]
+    - [ ] StubHub API (concerts + sports) [web:60][web:63][web:67]
+- [ ] Provider selection & fallback:
+  - Try Ticketmaster → if no result / specific event not found:
+    - query Viagogo/StubHub
+    - if still nothing, use web‑search collector (e.g. Firecrawl/Google) to find at least an official event page.
+- [ ] Link strategy:
+  - Ticketmaster event → link to Ticketmaster.
+  - If only Viagogo/StubHub has tickets → link there.
+  - If only official/other page exists (e.g. club website) → link directly to that page.
+
+### Caching
+
+- [ ] Simple in‑memory or Redis cache for event queries:
+  - cache key: normalized `(date range, country, cities, artist, category)`
+  - TTL: 6–24 hours
+- [ ] Prevent re‑running identical external searches when cached result exists.
 
 ### Observability
 
-- [ ] Basic logging & metrics:
-  - number of calls per provider
+- [ ] Metrics/logging:
+  - # of calls per provider
   - cache hit rate
-  - errors by provider
+  - fallback counts and provider error rates
 
 ---
 
-## Phase 4 – Intelligence & RAG (Optional)
+## Phase 4 – Context: Maps, Weather & “How to get there”
 
-**Goal:** Smarter discovery and recommendations.
+**Goal:** Enrich each event with real‑world context.
 
-- [ ] Add vector store (events + venues + past data).
-- [ ] Endpoint: `POST /api/events/suggest`
-  - Input: free-text query (e.g., “cheap rock concerts in Europe in May”)
-  - Output: ranked events list + explanations.
-- [ ] Simple scoring model combining:
-  - ticket provider popularity
-  - price range
-  - user location (if provided).
+### Maps & Distance
+
+- [ ] Google Maps / Places integration:
+  - [ ] “View on Maps” link/button for each event (venue location) [web:62][web:66]
+  - [ ] Distance between chosen hotel and venue using lat/lng
+- [ ] UI:
+  - [ ] Show “Hotel is X km from venue” in package modal
+
+### Weather Agent
+
+- [ ] Weather agent using weather API:
+  - [ ] Given (city, event_date) → weather summary for that date
+- [ ] UI:
+  - [ ] Show short weather line on event card / package (e.g. “Likely clear, 18–24°C”)
+
+### “How to get there”
+
+- [ ] Travel‑hints agent:
+  - [ ] For major venues, generate a brief “how to arrive” snippet
+    - public transport hints where possible
+    - otherwise generic suggestions (taxi/ride‑share, walking distances)
+- [ ] UI:
+  - [ ] Section in package modal: “Getting there”
 
 ---
 
-## Phase 5 – Polishing & Production
+## Phase 5 – Flights & Full Trip Builder
 
-- [ ] Authentication + “Favorites” per user.
-- [ ] Rate limiting & abuse protection.
-- [ ] Production deployment (Docker, cloud provider of choice).
-- [ ] Monitoring dashboard and error alerting.
+**Goal:** Make Secreticket a true “trip around the ticket”.
+
+### Backend
+
+- [ ] Skyscanner (or similar) integration:
+  - [ ] Flights agent builds affiliate search URLs based on:
+    - origin city / airport
+    - event city
+    - event date range [web:13][web:15][web:64][web:71]
+  - [ ] Extend `/api/events/{event_id}/package`:
+    - add `flights.search_url` and basic metadata (dates/origin)
+
+### Frontend
+
+- [ ] In package modal:
+  - [ ] “Search Flights” button opening the Skyscanner affiliate URL
+  - [ ] Optional selection of origin city/airport
+
+---
+
+## Phase 6 – Smart Search, Filters & Memory
+
+**Goal:** Smarter, cheaper, and less repetitive search.
+
+### Filters & Query Shaping
+
+- [ ] Country filter in UI
+  - [ ] If `country` is selected, require selecting at least one city to avoid huge queries
+- [ ] Better mapping of `category` (music, sports, arts, family) to provider‑specific classifications [attached_file:1][web:41]
+
+# Secreticket / EventPulse – Roadmap
+
+Secreticket is an event discovery and trip‑around‑the‑ticket platform:
+find concerts and sports events, then instantly build a full package
+(tickets, hotels, flights, maps, and context) around them.
+
+## Phase 0 – Current Status (MVP v0)
+
+- [x] Backend service with `/api/events` endpoint (Ticketmaster-based search)
+- [x] Basic event models (EventMention)
+- [x] Mock data mode when Ticketmaster API key is missing
+- [x] Live Ticketmaster data when key is present [attached_file:1][web:41]
+- [x] React frontend: search UI (date + city, artist)
+- [x] Basic tests for events collector and endpoints
+
+---
+
+## Phase 1 – Core Search UX ✅
+
+**Goal:** Make search useful for 80% of users.
+
+### Backend
+
+- [x] Relax required query params on `/api/events`
+  - `city` and `category` optional (only `date` required).
+  - Collector omits empty params when calling Ticketmaster. [attached_file:1][web:41]
+- [x] New endpoint: `GET /api/events/by-artist`
+  - Required: `artist`
+  - Optional: `date_from`, `date_to`, `country_code`, `limit`
+  - Uses Ticketmaster `keyword` search under the hood. [attached_file:1][web:41]
+- [x] Validate date parameters with `YYYY-MM-DD` pattern and clear error messages.
+
+### Frontend
+
+- [x] Tabs for **“Search by Date & City”** vs **“Search by Artist”**
+- [x] Artist search form with optional date range and country
+- [x] Loading / empty / error states
+
+### Testing
+
+- [x] Tests for `/api/events` (date only, date+city, date+city+category)
+- [x] Tests for `/api/events/by-artist` (artist only, with date range)
+
+---
+
+  - [x] `BOOKING_AFFILIATE_ID`
+  - [ ] `SKYSCANNER_PARTNER_ID` (future flights)
+
+### Frontend
+
+- [x] Event card includes **“View Package”** button
+- [ ] Show price line when available:
+  - `From {currency} {min_price}` or `{currency} {min_price}–{max_price}`
+- [ ] Show basic venue/location hint (e.g. “Location available” / coords text)
+- [x] Package modal/page:
+  - Event info (with price when available)
+  - Buttons:
+    - “Hotels near venue” (Booking link)
+    - “Flights to city” (Skyscanner link placeholder)
+    - “Buy tickets” (ticket URL)
+
+### Testing
+
+- [x] Unit tests for Booking link builder
+- [ ] Unit tests for Skyscanner link builder (future)
+- [x] Snapshot test for package response shape
+- [ ] Unit tests for parsing `priceRanges` and `location` into new fields
+
+---
+
+## Phase 3 – Multi‑Source Tickets & Scale
+
+**Goal:** Broader coverage and smarter provider selection.
+
+### Backend
+
+- [x] **Step 1: MultiCollector Abstraction**
+  - [x] Create `EventCollector` protocol/base class
+  - [x] Refactor `TicketmasterCollector` to use it
+  - [x] Create `MultiCollector` service to orchestrate multiple providers
+  - [x] Integrate into `api/services/collector.py`
+- [ ] **Step 2: Viagogo / StubHub Integration**
+  - [ ] Obtain API keys (or use placeholders)
+  - [ ] Create `ViagogoCollector`, `StubHubCollector`
+  - [ ] Add to `MultiCollector`
+- [ ] **Step 3: Redis Caching Strategy**
+  - [ ] Cache search results in Redis (key: `date:city:cat`)
+  - [ ] Cache individual events (key: `event:{id}`)
+  - [ ] TTL management (1 hour for search, 24 hours for events)
+- [ ] Provider selection & fallback:
+  - Try Ticketmaster → if no result / specific event not found:
+    - query Viagogo/StubHub
+    - if still nothing, use web‑search collector (e.g. Firecrawl/Google) to find at least an official event page.
+- [ ] Link strategy:
+  - Ticketmaster event → link to Ticketmaster.
+  - If only Viagogo/StubHub has tickets → link there.
+  - If only official/other page exists (e.g. club website) → link directly to that page.
+
+### Caching
+
+- [ ] Simple in‑memory or Redis cache for event queries:
+  - cache key: normalized `(date range, country, cities, artist, category)`
+  - TTL: 6–24 hours
+- [ ] Prevent re‑running identical external searches when cached result exists.
+
+### Observability
+
+- [ ] Metrics/logging:
+  - # of calls per provider
+  - cache hit rate
+  - fallback counts and provider error rates
+
+---
+
+## Phase 4 – Context: Maps, Weather & “How to get there”
+
+**Goal:** Enrich each event with real‑world context.
+
+### Maps & Distance
+
+- [ ] Google Maps / Places integration:
+  - [ ] “View on Maps” link/button for each event (venue location) [web:62][web:66]
+  - [ ] Distance between chosen hotel and venue using lat/lng
+- [ ] UI:
+  - [ ] Show “Hotel is X km from venue” in package modal
+
+### Weather Agent
+
+- [ ] Weather agent using weather API:
+  - [ ] Given (city, event_date) → weather summary for that date
+- [ ] UI:
+  - [ ] Show short weather line on event card / package (e.g. “Likely clear, 18–24°C”)
+
+### “How to get there”
+
+- [ ] Travel‑hints agent:
+  - [ ] For major venues, generate a brief “how to arrive” snippet
+    - public transport hints where possible
+    - otherwise generic suggestions (taxi/ride‑share, walking distances)
+- [ ] UI:
+  - [ ] Section in package modal: “Getting there”
+
+---
+
+## Phase 5 – Flights & Full Trip Builder
+
+**Goal:** Make Secreticket a true “trip around the ticket”.
+
+### Backend
+
+- [ ] Skyscanner (or similar) integration:
+  - [ ] Flights agent builds affiliate search URLs based on:
+    - origin city / airport
+    - event city
+    - event date range [web:13][web:15][web:64][web:71]
+  - [ ] Extend `/api/events/{event_id}/package`:
+    - add `flights.search_url` and basic metadata (dates/origin)
+
+### Frontend
+
+- [ ] In package modal:
+  - [ ] “Search Flights” button opening the Skyscanner affiliate URL
+  - [ ] Optional selection of origin city/airport
+
+---
+
+## Phase 6 – Smart Search, Filters & Memory
+
+**Goal:** Smarter, cheaper, and less repetitive search.
+
+### Filters & Query Shaping
+
+- [ ] Country filter in UI
+  - [ ] If `country` is selected, require selecting at least one city to avoid huge queries
+- [ ] Better mapping of `category` (music, sports, arts, family) to provider‑specific classifications [attached_file:1][web:41]
+
+### Semantic Search & Memory
+
+- [ ] Semantic search endpoint:
+  - `POST /api/events/search-semantic`
+  - Input: free‑text (e.g. “cheap rock festivals in Spain in May under $200”)
+  - Output: structured internal query + results
+- [ ] Memory / deduped queries:
+  - [ ] Query‑cache layer (in‑memory/Redis)
+  - [ ] Before hitting external providers, check if the same semantic+structural query was answered recently
+- [ ] Track stats:
+  - cache hit rate
+  - # external calls saved
+
+---
+
+## Phase 7 – Polishing & Production
+
+- [ ] Authentication + “Favorites” per user (watchlists for artists/teams)
+- [ ] Rate limiting & abuse protection
+- [ ] Production deployment (Docker, cloud provider of choice)
+- [ ] Monitoring dashboard and alerting

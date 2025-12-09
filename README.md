@@ -178,7 +178,17 @@ GET /api/events/tm_123/package
 
 ```json
 {
-  "event": { "id": "tm_123", "text": "Coldplay - Live", "city": "Tel Aviv", ... },
+  "event": { 
+    "id": "tm_123", 
+    "text": "Coldplay - Live", 
+    "city": "Tel Aviv",
+    "min_price": 100.0,
+    "max_price": 300.0,
+    "currency": "USD",
+    "venue_lat": 32.0853,
+    "venue_lng": 34.7818,
+    ... 
+  },
   "tickets": { "url": "https://ticketmaster.com/..." },
   "hotels": {
     "city": "Tel Aviv",

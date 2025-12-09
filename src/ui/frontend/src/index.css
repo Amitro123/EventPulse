@@ -556,6 +556,34 @@ body {
   text-align: center;
 }
 
+.location-indicator {
+  font-size: 0.8rem;
+  color: var(--primary-color);
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
+
+.modal-event-details {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.modal-price {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: var(--accent-green);
+  margin: 0 0 0.5rem 0;
+}
+
+.modal-coords {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-family: monospace;
+  margin: 0;
+}
+
 .package-sections {
   display: flex;
   flex-direction: column;

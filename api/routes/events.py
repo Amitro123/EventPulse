@@ -4,10 +4,16 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from api.models.event import EventMention, EventPackageResponse, TicketsInfo, HotelsInfo
-from api.collectors.ticketmaster import collect_events, search_by_artist
+from api.collectors.ticketmaster import TicketmasterCollector
+from api.services.collector import MultiCollector
+from api.collectors.base import EventSearchQuery, ArtistSearchQuery
 from api import config
 
 router = APIRouter(prefix="/api", tags=["events"])
+
+# Initialize MultiCollector with Ticketmaster as the primary provider
+# Future: Inject this dependency or load from config
+_multi_collector = MultiCollector(collectors=[TicketmasterCollector()])
 
 # In-memory cache for events (simulates storage for package lookup)
 _events_cache: dict[str, EventMention] = {}
@@ -65,7 +71,7 @@ async def search_events(
     
     Returns a list of events with affiliate ticket URLs for monetization.
     """
-    events = await collect_events(
+    query = EventSearchQuery(
         date=date,
         city=city,
         category=category,
@@ -73,6 +79,7 @@ async def search_events(
         country_code=country_code,
         page=page
     )
+    events = await _multi_collector.search(query)
     _cache_events(events)
     return events
 
@@ -105,7 +112,7 @@ async def search_events_by_artist(
     
     Returns a list of upcoming events for the specified artist with affiliate ticket URLs.
     """
-    events = await search_by_artist(
+    query = ArtistSearchQuery(
         artist=artist,
         date_from=date_from,
         date_to=date_to,
@@ -113,6 +120,7 @@ async def search_events_by_artist(
         limit=limit,
         page=page
     )
+    events = await _multi_collector.search_by_artist(query)
     _cache_events(events)
     return events
 

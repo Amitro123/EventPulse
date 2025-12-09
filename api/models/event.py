@@ -14,8 +14,14 @@ class EventMention(BaseModel):
     category: Optional[str] = None
     image_url: Optional[str] = None
     price_range: Optional[str] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    currency: Optional[str] = None
+    venue_lat: Optional[float] = None
+    venue_lng: Optional[float] = None
     scores: dict = {}  # Analyzer output (popularity, etc.)
     raw_data: Optional[dict] = None
+    provider: str = "ticketmaster"
 
 
 class HealthResponse(BaseModel):
