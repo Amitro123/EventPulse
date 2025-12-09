@@ -8,6 +8,7 @@ via ticket providers, hotels, and flights.
 - [x] Backend service with `/api/events` endpoint (Ticketmaster-based search)
 - [x] Basic event models (EventMention)
 - [x] Mock data mode when Ticketmaster API key is missing
+- [x] Live Ticketmaster data when key is present
 - [x] React frontend: simple search UI (date + city)
 - [x] Basic tests for events collector and endpoint
 

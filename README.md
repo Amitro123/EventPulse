@@ -20,7 +20,27 @@ TICKETMASTER_API_KEY=your_ticketmaster_api_key
 
 Get your API key from [Ticketmaster Developer Portal](https://developer.ticketmaster.com).
 
-### 3. Run Development Servers
+### 3. Using Live Ticketmaster Data
+
+The application runs in **Mock Mode** by default if no API key is set. To use live data:
+
+1.  Set `TICKETMASTER_API_KEY` in your `.env` file.
+    - If the key starts with `your_` or is `test`, mock mode is used.
+2.  Restart the backend server.
+
+**Verify Live Data:**
+
+Use the provided smoke test script:
+```bash
+python scripts/smoke_ticketmaster.py --country US --date 2025-12-15
+```
+
+Or verify with curl:
+```bash
+curl "http://localhost:8000/api/events?date=2025-12-15&country_code=US"
+```
+
+### 4. Run Development Servers
 
 **Option A: Single command (recommended)**
 

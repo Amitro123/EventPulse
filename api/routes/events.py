@@ -57,7 +57,8 @@ async def search_events(
     country_code: str = Query(
         default=config.DEFAULT_COUNTRY_CODE,
         description="Country code (e.g., 'IL', 'US')"
-    )
+    ),
+    page: int = Query(default=0, ge=0, description="Page number (0-indexed)")
 ) -> List[EventMention]:
     """
     Search for events by date with optional city and category filters.
@@ -69,7 +70,8 @@ async def search_events(
         city=city,
         category=category,
         limit=limit,
-        country_code=country_code
+        country_code=country_code,
+        page=page
     )
     _cache_events(events)
     return events
@@ -95,7 +97,8 @@ async def search_events_by_artist(
         default="US",
         description="Country code (e.g., 'US', 'GB', 'IL')"
     ),
-    limit: int = Query(default=20, ge=1, le=100, description="Max events to return")
+    limit: int = Query(default=20, ge=1, le=100, description="Max events to return"),
+    page: int = Query(default=0, ge=0, description="Page number (0-indexed)")
 ) -> List[EventMention]:
     """
     Search for events by artist/performer name.
@@ -107,7 +110,8 @@ async def search_events_by_artist(
         date_from=date_from,
         date_to=date_to,
         country_code=country_code,
-        limit=limit
+        limit=limit,
+        page=page
     )
     _cache_events(events)
     return events

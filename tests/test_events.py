@@ -1,4 +1,5 @@
 """Tests for EventPulse API."""
+import os
 import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
@@ -262,3 +263,29 @@ class TestRootEndpoint:
         data = response.json()
         assert "message" in data or "EventPulse" in str(data)
 
+
+class TestLiveIntegration:
+    """Live integration tests for Ticketmaster API."""
+    
+    @pytest.mark.skipif(
+        not os.getenv("USE_TICKETMASTER_LIVE"),
+        reason="Skipping live API tests unless USE_TICKETMASTER_LIVE is set"
+    )
+    @pytest.mark.asyncio
+    async def test_live_ticketmaster_search(self):
+        """Should fetch real events from Ticketmaster."""
+        # Ensure we have a valid key in env before running
+        events = await collect_events(
+            date="2025-12-15",
+            country_code="US",
+            limit=5
+        )
+        
+        # We expect some result or at least a graceful empty list
+        assert isinstance(events, list)
+        if len(events) > 0:
+            e = events[0]
+            assert e.id
+            assert e.text
+            assert e.url.startswith("http")
+            print(f"Live event found: {e.text} at {e.venue_name}")

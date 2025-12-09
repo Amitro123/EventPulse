@@ -10,7 +10,8 @@ async def collect_events(
     city: Optional[str] = None,
     category: Optional[str] = None,
     limit: int = 20,
-    country_code: str = "IL"
+    country_code: str = "IL",
+    page: int = 0
 ) -> List[EventMention]:
     """
     Collect events from Ticketmaster Discovery API.
@@ -21,6 +22,7 @@ async def collect_events(
         category: Optional event category (music, sports, arts, etc.)
         limit: Maximum number of events to return
         country_code: Country code (default: IL for Israel)
+        page: Page number (default: 0)
     
     Returns:
         List of EventMention objects with affiliate ticket links
@@ -31,7 +33,7 @@ async def collect_events(
     
     if is_placeholder:
         # Return mock data for demo/testing without valid API key
-        print("[INFO] No valid Ticketmaster API key configured, using mock data")
+        print("[INFO] Mock Mode: No valid Ticketmaster API key configured")
         return _get_mock_events(date, city, category)
     
     url = f"{config.TICKETMASTER_BASE_URL}/events.json"
@@ -40,7 +42,8 @@ async def collect_events(
         "countryCode": country_code,
         "localStartDateTime": f"{date}T00:00:00,{date}T23:59:59",
         "size": limit,
-        "sort": "date,asc"
+        "sort": "date,asc",
+        "page": page
     }
     
     # Add optional filters only if provided
@@ -53,11 +56,17 @@ async def collect_events(
     
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
+            print(f"[INFO] Fetching events from Ticketmaster: date={date}, city={city}, country={country_code}")
             response = await client.get(url, params=params)
             response.raise_for_status()
+            
+            # Log success
+            print(f"[INFO] Ticketmaster Success: {response.status_code}")
+            
             data = response.json()
             
             if "_embedded" not in data or "events" not in data["_embedded"]:
+                print("[INFO] Ticketmaster: No events found")
                 return events
             
             for e in data["_embedded"]["events"]:
@@ -85,9 +94,9 @@ async def collect_events(
                 
                 events.append(EventMention(
                     id=e["id"],
-                    text=e["name"],
-                    url=e["url"],  # Affiliate ticket link
-                    timestamp=e["dates"]["start"].get("localDate", date),
+                    text=e.get("name", "Unknown Event"),
+                    url=e.get("url", ""),  # Affiliate ticket link, safe get
+                    timestamp=e.get("dates", {}).get("start", {}).get("localDate", date),
                     venue_name=venue_name,
                     city=event_city,
                     category=category,
@@ -98,9 +107,9 @@ async def collect_events(
                 ))
                 
         except httpx.HTTPStatusError as e:
-            print(f"Ticketmaster API error: {e.response.status_code}")
+            print(f"[ERROR] Ticketmaster API error: {e.response.status_code} - {e.response.text[:100]}")
         except Exception as e:
-            print(f"Error fetching events: {e}")
+            print(f"[ERROR] Error fetching events: {e}")
     
     return events
 
@@ -159,7 +168,8 @@ async def search_by_artist(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     country_code: str = "US",
-    limit: int = 20
+    limit: int = 20,
+    page: int = 0
 ) -> List[EventMention]:
     """
     Search events by artist name using Ticketmaster Discovery API.
@@ -170,6 +180,7 @@ async def search_by_artist(
         date_to: Optional end date in YYYY-MM-DD format
         country_code: Country code (default: US)
         limit: Maximum number of events to return
+        page: Page number (default: 0)
     
     Returns:
         List of EventMention objects with affiliate ticket links
@@ -188,7 +199,8 @@ async def search_by_artist(
         "keyword": artist,
         "countryCode": country_code,
         "size": limit,
-        "sort": "date,asc"
+        "sort": "date,asc",
+        "page": page
     }
     
     # Add optional date range filters

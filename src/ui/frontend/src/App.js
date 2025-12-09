@@ -169,74 +169,96 @@ function App() {
     // Common state
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [page, setPage] = useState(0);
     const [error, setError] = useState(null);
     const [searched, setSearched] = useState(false);
+    const [hasMore, setHasMore] = useState(true);
 
-    const searchByDate = useCallback(async (e) => {
-        e.preventDefault();
+    const performSearch = useCallback(async (mode, params, isLoadMore = false) => {
         setLoading(true);
         setError(null);
         setSearched(true);
 
         try {
-            const params = new URLSearchParams({ date, limit: 20 });
-            if (city) params.append('city', city);
-            if (category) params.append('category', category);
+            const queryParams = new URLSearchParams(params);
+            // Append page/limit to params
+            queryParams.append('limit', '20');
 
-            const response = await fetch(`/api/events?${params}`);
+            const endpoint = mode === 'date' ? '/api/events' : '/api/events/by-artist';
+            const response = await fetch(`${endpoint}?${queryParams}`);
 
             if (!response.ok) {
                 throw new Error('Failed to fetch events');
             }
 
             const data = await response.json();
-            setEvents(data);
+
+            setEvents(prev => isLoadMore ? [...prev, ...data] : data);
+            setHasMore(data.length === 20); // Assume more if full page returned
         } catch (err) {
             setError(err.message);
-            setEvents([]);
+            if (!isLoadMore) setEvents([]);
         } finally {
             setLoading(false);
         }
-    }, [date, city, category]);
+    }, []);
 
-    const searchByArtist = useCallback(async (e) => {
-        e.preventDefault();
+    const searchByDate = useCallback((e) => {
+        if (e) e.preventDefault();
+        setPage(0);
+        const params = { date };
+        if (city) params['city'] = city;
+        if (category) params['category'] = category;
+        if (countryCode) params['country_code'] = countryCode;
+        params['page'] = 0;
+
+        performSearch('date', params, false);
+    }, [date, city, category, countryCode, performSearch]);
+
+    const searchByArtist = useCallback((e) => {
+        if (e) e.preventDefault();
         if (!artist.trim()) {
             setError('Please enter an artist name');
             return;
         }
+        setPage(0);
+        const params = { artist };
+        if (dateFrom) params['date_from'] = dateFrom;
+        if (dateTo) params['date_to'] = dateTo;
+        if (countryCode) params['country_code'] = countryCode;
+        params['page'] = 0;
 
-        setLoading(true);
-        setError(null);
-        setSearched(true);
+        performSearch('artist', params, false);
+    }, [artist, dateFrom, dateTo, countryCode, performSearch]);
 
-        try {
-            const params = new URLSearchParams({ artist, limit: 20 });
-            if (dateFrom) params.append('date_from', dateFrom);
-            if (dateTo) params.append('date_to', dateTo);
-            if (countryCode) params.append('country_code', countryCode);
+    const loadMore = useCallback(() => {
+        const nextPage = page + 1;
+        setPage(nextPage);
 
-            const response = await fetch(`/api/events/by-artist?${params}`);
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch events');
-            }
-
-            const data = await response.json();
-            setEvents(data);
-        } catch (err) {
-            setError(err.message);
-            setEvents([]);
-        } finally {
-            setLoading(false);
+        const params = {};
+        if (searchMode === 'date') {
+            params['date'] = date;
+            if (city) params['city'] = city;
+            if (category) params['category'] = category;
+            if (countryCode) params['country_code'] = countryCode;
+        } else {
+            params['artist'] = artist;
+            if (dateFrom) params['date_from'] = dateFrom;
+            if (dateTo) params['date_to'] = dateTo;
+            if (countryCode) params['country_code'] = countryCode;
         }
-    }, [artist, dateFrom, dateTo, countryCode]);
+        params['page'] = nextPage;
+
+        performSearch(searchMode, params, true);
+    }, [page, searchMode, date, city, category, countryCode, artist, dateFrom, dateTo, performSearch]);
 
     const handleModeChange = (mode) => {
         setSearchMode(mode);
         setEvents([]);
         setSearched(false);
         setError(null);
+        setPage(0);
+        setHasMore(true);
     };
 
     return (
@@ -311,6 +333,26 @@ function App() {
                                     <option value="sports">⚽ Sports</option>
                                     <option value="arts">🎭 Arts & Theater</option>
                                     <option value="family">👨‍👩‍👧‍👦 Family</option>
+                                </select>
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="dateCountry">Country</label>
+                                <select
+                                    id="dateCountry"
+                                    value={countryCode}
+                                    onChange={(e) => setCountryCode(e.target.value)}
+                                >
+                                    <option value="US">🇺🇸 United States</option>
+                                    <option value="GB">🇬🇧 United Kingdom</option>
+                                    <option value="CA">🇨🇦 Canada</option>
+                                    <option value="AU">🇦🇺 Australia</option>
+                                    <option value="DE">🇩🇪 Germany</option>
+                                    <option value="FR">🇫🇷 France</option>
+                                    <option value="IL">🇮🇱 Israel</option>
+                                    <option value="ES">🇪🇸 Spain</option>
+                                    <option value="IT">🇮🇹 Italy</option>
+                                    <option value="NL">🇳🇱 Netherlands</option>
                                 </select>
                             </div>
                         </div>
@@ -433,6 +475,18 @@ function App() {
                                 <EventCard key={event.id} event={event} />
                             ))}
                         </div>
+
+                        {hasMore && !loading && (
+                            <button className="load-more-btn" onClick={loadMore}>
+                                Load More Events
+                            </button>
+                        )}
+
+                        {loading && events.length > 0 && (
+                            <div className="loading-more">
+                                <span className="loading-spinner-inline"></span> Loading more...
+                            </div>
+                        )}
                     </section>
                 )}
             </main>
