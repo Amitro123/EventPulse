@@ -10,3 +10,5 @@ build/
 *.egg-info/
 
 package-lock.json
+
+TICKETMASTER_API_KEY
