@@ -1,5 +1,8 @@
 # EventPulse
 
+![Architecture](./assets/architecture_diagram.png)
+
+
 Event discovery platform for concerts and sports with affiliate monetization.
 
 ## Quick Setup
