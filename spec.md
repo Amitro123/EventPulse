@@ -20,22 +20,28 @@ for tickets, hotels, and flights.
 
 1. User selects: date (required), city (optional), category (optional)
 2. Frontend calls: `GET /api/events?date=YYYY-MM-DD&city=...&category=...`
-3. Backend validates date pattern, queries Ticketmaster API
-4. Returns list of events with ticket URLs
+3. Backend queries event sources with priority-based fallback:
+   - **Viagogo** (primary) - tried first
+   - **Ticketmaster** (fallback) - used if Viagogo returns no results
+4. Returns list of events with `provider` field indicating source
 
 ### 2.2 Search by Artist
 
 1. User enters: artist name (required), date range (optional)
 2. Frontend calls: `GET /api/events/by-artist?artist=...&date_from=...&date_to=...`
-3. Backend uses Ticketmaster `keyword` search
-4. Returns list of events for that artist
+3. Backend uses priority-based search (Viagogo → Ticketmaster)
+4. Returns list of events for that artist with `provider` field
 
 ### 2.3 View Event Package
 
 1. User clicks "View Package" on an event card
 2. Frontend calls: `GET /api/events/{event_id}/package`
-3. Modal displays:
-   - Tickets section → link to Ticketmaster
+3. Backend determines best ticket source using priority:
+   - **Ticketmaster** (preferred)
+   - **Official site** (future)
+   - **Viagogo** (fallback)
+4. Modal displays:
+   - Tickets section → link with "Tickets via [provider]" label
    - Hotels section → link to Booking.com (check-in = event date, check-out = event date + 1)
 
 ---
@@ -69,12 +75,19 @@ for tickets, hotels, and flights.
 
 **Response fields:**
 
-- `event` – Full event object
-- `tickets.url` – Ticketmaster purchase URL
+- `event` – Full event object with `provider` and `ticket_provider` fields
+- `tickets.url` – Ticket purchase URL (determined by priority)
+- `tickets.ticket_provider` – Who sells the ticket ("ticketmaster", "viagogo", "official_site", or null)
 - `hotels.city` – Event city
 - `hotels.check_in` – Event date (YYYY-MM-DD)
 - `hotels.check_out` – Event date + 1 day
 - `hotels.affiliate_url` – Booking.com deep link with affiliate ID
+
+**Ticket Provider Priority:**
+1. Ticketmaster URL (if event from Ticketmaster)
+2. Official site URL (future feature)
+3. Viagogo URL (if event from Viagogo or as fallback)
+4. null (tickets unavailable)
 
 ---
 

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Events API routes."""
 from fastapi import APIRouter, Query, Path, HTTPException
 from typing import List, Optional
@@ -5,15 +6,19 @@ from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from api.models.event import EventMention, EventPackageResponse, TicketsInfo, HotelsInfo
 from api.collectors.ticketmaster import TicketmasterCollector
+from api.collectors.viagogo import ViagogoCollector
 from api.services.collector import MultiCollector
 from api.collectors.base import EventSearchQuery, ArtistSearchQuery
 from api import config
 
 router = APIRouter(prefix="/api", tags=["events"])
 
-# Initialize MultiCollector with Ticketmaster as the primary provider
-# Future: Inject this dependency or load from config
-_multi_collector = MultiCollector(collectors=[TicketmasterCollector()])
+# Initialize MultiCollector with Viagogo first (priority), then Ticketmaster (fallback)
+# Order matters: first collector in list has highest priority
+_multi_collector = MultiCollector(collectors=[
+    ViagogoCollector(),     # Primary: Viagogo for event discovery
+    TicketmasterCollector() # Fallback: Ticketmaster if Viagogo returns empty
+])
 
 # In-memory cache for events (simulates storage for package lookup)
 _events_cache: dict[str, EventMention] = {}
@@ -125,9 +130,62 @@ async def search_events_by_artist(
     return events
 
 
+def _determine_ticket_info(event: EventMention) -> TicketsInfo:
+    """
+    Determine the best ticket source based on provider priority.
+    
+    Priority order:
+    1. Ticketmaster URL -> ticket_provider="ticketmaster"
+    2. Official site URL -> ticket_provider="official_site" (future)
+    3. Viagogo URL -> ticket_provider="viagogo" (with affiliate)
+    4. None -> no tickets available
+    """
+    # Priority 1: If event has a Ticketmaster URL
+    if event.provider == "ticketmaster" and event.url:
+        return TicketsInfo(
+            url=event.url,
+            ticket_provider="ticketmaster"
+        )
+    
+    # Priority 2: Official site URL (placeholder for future WebSearchCollector)
+    # TODO: Check for official_site_url field when available
+    # if event.official_site_url:
+    #     return TicketsInfo(url=event.official_site_url, ticket_provider="official_site")
+    
+    # Priority 3: Viagogo URL as fallback
+    if event.viagogo_url:
+        # Viagogo URL already includes affiliate ID from collector
+        return TicketsInfo(
+            url=event.viagogo_url,
+            ticket_provider="viagogo"
+        )
+    
+    # If we have any URL at all (e.g., from Viagogo provider), use it
+    if event.url:
+        # Determine provider based on URL or event.provider
+        if "viagogo" in event.url.lower():
+            return TicketsInfo(
+                url=event.url,
+                ticket_provider="viagogo"
+            )
+        elif "ticketmaster" in event.url.lower():
+            return TicketsInfo(
+                url=event.url,
+                ticket_provider="ticketmaster"
+            )
+        else:
+            return TicketsInfo(
+                url=event.url,
+                ticket_provider=event.provider
+            )
+    
+    # Priority 4: No tickets available
+    return TicketsInfo(url=None, ticket_provider=None)
+
+
 @router.get("/events/{event_id}/package", response_model=EventPackageResponse)
 async def get_event_package(
-    event_id: str = Path(..., description="Ticketmaster event ID"),
+    event_id: str = Path(..., description="Event ID from any provider"),
     origin_city: Optional[str] = Query(
         default=None,
         description="Origin city for flights (for future use)"
@@ -137,6 +195,7 @@ async def get_event_package(
     Get a package for an event including tickets and hotel links.
     
     Returns event details with affiliate URLs for tickets and hotels.
+    Ticket provider is determined by priority: Ticketmaster -> Official site -> Viagogo.
     """
     # Try to find event in cache
     event = _events_cache.get(event_id)
@@ -150,7 +209,8 @@ async def get_event_package(
             timestamp=datetime.now().strftime("%Y-%m-%d"),
             venue_name="Demo Venue",
             city="New York",
-            category="music"
+            category="music",
+            provider="ticketmaster"
         )
     
     # Calculate check-in/check-out dates
@@ -158,8 +218,15 @@ async def get_event_package(
     check_in = event.timestamp
     check_out = (event_date + timedelta(days=1)).strftime("%Y-%m-%d")
     
-    # Build response
-    tickets = TicketsInfo(url=event.url)
+    # Determine ticket source using priority logic
+    tickets = _determine_ticket_info(event)
+    
+    # Update event's ticket_provider for consistency
+    event_with_ticket_provider = event.model_copy(update={
+        "ticket_provider": tickets.ticket_provider
+    })
+    
+    # Build hotel info
     hotels = HotelsInfo(
         city=event.city,
         check_in=check_in,
@@ -168,7 +235,7 @@ async def get_event_package(
     )
     
     return EventPackageResponse(
-        event=event,
+        event=event_with_ticket_provider,
         tickets=tickets,
         hotels=hotels
     )

@@ -74,19 +74,24 @@ find concerts and sports events, then instantly build a full package
 
 ### Backend
 
-- [ ] Introduce `MultiCollector` abstraction:
-  - Primary: Ticketmaster Discovery API [attached_file:1][web:41]
-  - Secondary providers:
-    - [ ] Viagogo API (concerts + sports) [web:60][web:63][web:67]
-    - [ ] StubHub API (concerts + sports) [web:60][web:63][web:67]
-- [ ] Provider selection & fallback:
-  - Try Ticketmaster → if no result / specific event not found:
-    - query Viagogo/StubHub
-    - if still nothing, use web‑search collector (e.g. Firecrawl/Google) to find at least an official event page.
-- [ ] Link strategy:
-  - Ticketmaster event → link to Ticketmaster.
-  - If only Viagogo/StubHub has tickets → link there.
-  - If only official/other page exists (e.g. club website) → link directly to that page.
+- [x] **Introduce `MultiCollector` abstraction** ✅
+  - Primary: Viagogo (mock mode with `USE_VIAGOGO_MOCK=true`) [DONE]
+  - Fallback: Ticketmaster Discovery API [DONE]
+  - Priority-based fallback: Viagogo → Ticketmaster [DONE]
+  - Secondary providers (future):
+    - [ ] StubHub API (concerts + sports)
+- [x] **Provider selection & fallback** ✅
+  - Viagogo tried first → if no results, fallback to Ticketmaster [DONE]
+  - Future: web-search collector (e.g. Firecrawl/Google) for official event pages
+- [x] **Ticket provider priority system** ✅
+  - Ticketmaster URL (preferred when available) [DONE]
+  - Official site URL (placeholder for future) [DONE]
+  - Viagogo URL (fallback) [DONE]
+  - Returns `ticket_provider` field in package response [DONE]
+- [x] **Event model updates** ✅
+  - Added `provider` field (event metadata source) [DONE]
+  - Added `ticket_provider` field (who sells the ticket) [DONE]
+  - Added `viagogo_url` field (for fallback) [DONE]
 
 ### Caching
 

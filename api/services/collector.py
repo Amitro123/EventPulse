@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+"""Multi-collector service for orchestrating event collectors."""
 from typing import List, Dict
 import logging
 from api.collectors.base import EventCollector, EventSearchQuery, ArtistSearchQuery
@@ -6,52 +8,72 @@ from api.models.event import EventMention
 # Configure logger
 logger = logging.getLogger(__name__)
 
+
 class MultiCollector:
-    """Service to orchestrate multiple event collectors."""
+    """
+    Service to orchestrate multiple event collectors with priority-based fallback.
+    
+    Priority order: Viagogo first, then Ticketmaster fallback.
+    Stops on first collector that returns results.
+    """
 
     def __init__(self, collectors: List[EventCollector]):
+        """
+        Initialize with list of collectors in priority order.
+        First collector in the list has highest priority.
+        """
         self.collectors = collectors
 
     async def search(self, query: EventSearchQuery) -> List[EventMention]:
         """
-        Search for events across all registered collectors.
-        For now, returns results from the first successful collector.
+        Search for events using priority-based fallback.
+        
+        Tries each collector in order until one returns results.
+        If a collector fails or returns empty, moves to next.
         """
-        all_events = []
         for collector in self.collectors:
+            provider_name = collector.__class__.__name__
             try:
-                # Log usage
-                provider_name = collector.__class__.__name__
+                logger.info(f"Trying {provider_name} for event search...")
                 events = await collector.search(query)
                 
                 if events:
                     count = len(events)
-                    logger.info(f"Collected {count} events from {provider_name}")
-                    # For Phase 3 Step 1, we can just aggregate or return first match.
-                    # Given the roadmap implies fallback logic: "Try Ticketmaster -> if no result... query Viagogo"
-                    # But for generic search we might want to aggregate.
-                    # Let's aggregate for now to support multi-source.
-                    all_events.extend(events)
+                    logger.info(f"Got {count} events from {provider_name} - using these results")
+                    return events
+                else:
+                    logger.info(f"{provider_name} returned no events, trying next collector...")
                     
-                    # If we have enough events, we could stop. But for now collect all.
             except Exception as e:
-                logger.error(f"Error collecting from {collector.__class__.__name__}: {e}")
+                logger.error(f"Error collecting from {provider_name}: {e}")
+                logger.info(f"Falling back to next collector...")
         
-        return all_events
+        logger.warning("All collectors returned empty results")
+        return []
 
     async def search_by_artist(self, query: ArtistSearchQuery) -> List[EventMention]:
-        """Search by artist across all collectors."""
-        all_events = []
+        """
+        Search by artist using priority-based fallback.
+        
+        Same logic as search(): tries collectors in order, 
+        returns results from first successful one.
+        """
         for collector in self.collectors:
+            provider_name = collector.__class__.__name__
             try:
-                provider_name = collector.__class__.__name__
+                logger.info(f"Trying {provider_name} for artist search: {query.artist}")
                 events = await collector.search_by_artist(query)
                 
                 if events:
                     count = len(events)
-                    logger.info(f"Collected {count} artist events from {provider_name}")
-                    all_events.extend(events)
+                    logger.info(f"Got {count} artist events from {provider_name} - using these results")
+                    return events
+                else:
+                    logger.info(f"{provider_name} returned no artist events, trying next collector...")
+                    
             except Exception as e:
-                logger.error(f"Error collecting artist events from {collector.__class__.__name__}: {e}")
-                
-        return all_events
+                logger.error(f"Error collecting artist events from {provider_name}: {e}")
+                logger.info(f"Falling back to next collector...")
+        
+        logger.warning(f"All collectors returned empty results for artist: {query.artist}")
+        return []

@@ -12,3 +12,21 @@ build/
 package-lock.json
 
 TICKETMASTER_API_KEY
+
+# Test artifacts and temporary files
+test_output.txt
+run_tests.py
+src/ui/frontend/description
+test_results.txt
+
+# Git internal files (should not be in subdirectories)
+**/hooks/
+**/objects/
+**/refs/
+**/info/
+**/HEAD
+**/config
+**/description
+**/packed-refs
+**/index
+**/*.sample

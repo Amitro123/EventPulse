@@ -16,7 +16,7 @@ REM Wait a moment for backend to initialize
 timeout /t 2 /nobreak > nul
 
 REM Start frontend in new window
-echo Starting Frontend (React) on http://localhost:3000...
+echo Starting Frontend (React) on http://localhost:8080...
 start "EventPulse Frontend" cmd /k "cd src\ui\frontend && npm start"
 
 echo.

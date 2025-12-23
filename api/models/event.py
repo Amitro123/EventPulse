@@ -4,10 +4,10 @@ from typing import Optional
 
 
 class EventMention(BaseModel):
-    """Event model representing a Ticketmaster event."""
+    """Event model representing an event from any provider."""
     id: str
     text: str  # Event name, e.g., "Coldplay - Music of the Spheres"
-    url: str  # Affiliate ticket link
+    url: str  # Primary ticket link (Ticketmaster or other)
     timestamp: str  # Event date
     venue_name: str
     city: str
@@ -21,7 +21,9 @@ class EventMention(BaseModel):
     venue_lng: Optional[float] = None
     scores: dict = {}  # Analyzer output (popularity, etc.)
     raw_data: Optional[dict] = None
-    provider: str = "ticketmaster"
+    provider: str = "ticketmaster"  # Where event METADATA came from: "viagogo", "ticketmaster", "web"
+    ticket_provider: Optional[str] = None  # Who sells the ticket: "ticketmaster", "viagogo", "official_site"
+    viagogo_url: Optional[str] = None  # Viagogo event URL for fallback ticket source
 
 
 class HealthResponse(BaseModel):
@@ -40,7 +42,8 @@ class EventSearchRequest(BaseModel):
 
 class TicketsInfo(BaseModel):
     """Ticket information for package."""
-    url: str
+    url: Optional[str] = None
+    ticket_provider: Optional[str] = None  # "ticketmaster", "viagogo", "official_site", or None
 
 
 class HotelsInfo(BaseModel):

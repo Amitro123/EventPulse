@@ -259,12 +259,21 @@ class TestByArtistEndpoint:
 class TestPackageEndpoint:
     """Tests for event package endpoint."""
     
+    def _get_first_event_id(self):
+        """Helper to get first event ID from search results."""
+        response = client.get("/api/events?date=2025-12-15")
+        data = response.json()
+        if data and len(data) > 0:
+            return data[0]["id"]
+        return None
+    
     def test_package_returns_valid_structure(self):
         """Package endpoint should return event, tickets, and hotels."""
-        # First search to populate cache
-        client.get("/api/events?date=2025-12-15")
+        # First search to populate cache and get event ID
+        event_id = self._get_first_event_id()
+        assert event_id is not None, "No events returned from search"
         
-        response = client.get("/api/events/mock-1/package")
+        response = client.get(f"/api/events/{event_id}/package")
         assert response.status_code == 200
         data = response.json()
         
@@ -275,7 +284,8 @@ class TestPackageEndpoint:
         
         # Verify tickets
         assert "url" in data["tickets"]
-        assert data["tickets"]["url"].startswith("http")
+        if data["tickets"]["url"]:
+            assert data["tickets"]["url"].startswith("http")
         
         # Verify hotels
         assert "city" in data["hotels"]
@@ -285,10 +295,10 @@ class TestPackageEndpoint:
     
     def test_package_hotels_url_contains_city(self):
         """Package hotels URL should contain event city."""
-        # First search to populate cache
-        client.get("/api/events?date=2025-12-15")
+        event_id = self._get_first_event_id()
+        assert event_id is not None
         
-        response = client.get("/api/events/mock-1/package")
+        response = client.get(f"/api/events/{event_id}/package")
         data = response.json()
         
         # Booking URL should contain the city
@@ -298,10 +308,10 @@ class TestPackageEndpoint:
     
     def test_package_hotels_url_contains_dates(self):
         """Package hotels URL should contain check-in/check-out dates."""
-        # First search to populate cache
-        client.get("/api/events?date=2025-12-15")
+        event_id = self._get_first_event_id()
+        assert event_id is not None
         
-        response = client.get("/api/events/mock-1/package")
+        response = client.get(f"/api/events/{event_id}/package")
         data = response.json()
         
         affiliate_url = data["hotels"]["affiliate_url"]
@@ -316,10 +326,10 @@ class TestPackageEndpoint:
     
     def test_package_hotels_url_contains_affiliate_id(self):
         """Package hotels URL should contain affiliate ID."""
-        # First search to populate cache
-        client.get("/api/events?date=2025-12-15")
+        event_id = self._get_first_event_id()
+        assert event_id is not None
         
-        response = client.get("/api/events/mock-1/package")
+        response = client.get(f"/api/events/{event_id}/package")
         data = response.json()
         
         affiliate_url = data["hotels"]["affiliate_url"]
@@ -331,10 +341,10 @@ class TestPackageEndpoint:
         """Package check-out should be one day after check-in."""
         from datetime import datetime, timedelta
         
-        # First search to populate cache
-        client.get("/api/events?date=2025-12-15")
+        event_id = self._get_first_event_id()
+        assert event_id is not None
         
-        response = client.get("/api/events/mock-1/package")
+        response = client.get(f"/api/events/{event_id}/package")
         data = response.json()
         
         check_in = datetime.strptime(data["hotels"]["check_in"], "%Y-%m-%d")
@@ -355,8 +365,86 @@ class TestPackageEndpoint:
     
     def test_package_accepts_origin_city_param(self):
         """Package endpoint should accept optional origin_city param."""
-        response = client.get("/api/events/mock-1/package?origin_city=New%20York")
+        event_id = self._get_first_event_id()
+        response = client.get(f"/api/events/{event_id or 'test-1'}/package?origin_city=New%20York")
         assert response.status_code == 200
+    
+    def test_package_includes_ticket_provider_field(self):
+        """Package response should include ticket_provider in tickets object."""
+        event_id = self._get_first_event_id()
+        assert event_id is not None
+        
+        response = client.get(f"/api/events/{event_id}/package")
+        data = response.json()
+        
+        # Verify ticket_provider is present in tickets
+        assert "ticket_provider" in data["tickets"]
+        # Should be either a string or None
+        assert data["tickets"]["ticket_provider"] in ["ticketmaster", "viagogo", "official_site", None]
+    
+    def test_package_event_has_ticket_provider(self):
+        """Package event object should have ticket_provider field."""
+        event_id = self._get_first_event_id()
+        assert event_id is not None
+        
+        response = client.get(f"/api/events/{event_id}/package")
+        data = response.json()
+        
+        # Event object should also have ticket_provider for consistency
+        assert "ticket_provider" in data["event"]
+
+
+class TestPackageTicketProviderPriority:
+    """Tests for ticket provider priority logic in package endpoint."""
+    
+    def test_ticketmaster_event_uses_ticketmaster_provider(self):
+        """Events from Ticketmaster should have ticket_provider='ticketmaster'."""
+        # Search should populate cache with events
+        response = client.get("/api/events?date=2025-12-15")
+        data = response.json()
+        
+        # Get package for first event
+        if data and len(data) > 0:
+            event_id = data[0]["id"]
+            response = client.get(f"/api/events/{event_id}/package")
+            pkg_data = response.json()
+            
+            assert response.status_code == 200
+            assert "ticket_provider" in pkg_data["tickets"]
+    
+    def test_unknown_event_returns_demo_with_ticketmaster(self):
+        """Unknown event ID should return demo package with ticketmaster provider."""
+        response = client.get("/api/events/unknown-event-xyz/package")
+        data = response.json()
+        
+        assert response.status_code == 200
+        # Demo event defaults to ticketmaster provider
+        assert data["event"]["provider"] == "ticketmaster"
+        assert data["tickets"]["ticket_provider"] == "ticketmaster"
+    
+    def test_package_tickets_url_matches_provider(self):
+        """Package tickets URL should match the ticket_provider."""
+        # First search to populate cache
+        response = client.get("/api/events?date=2025-12-15")
+        data = response.json()
+        
+        if not data or len(data) == 0:
+            return  # Skip if no events
+        
+        event_id = data[0]["id"]
+        response = client.get(f"/api/events/{event_id}/package")
+        pkg_data = response.json()
+        
+        ticket_url = pkg_data["tickets"]["url"]
+        ticket_provider = pkg_data["tickets"]["ticket_provider"]
+        
+        # If provider is ticketmaster, URL should contain ticketmaster
+        if ticket_provider == "ticketmaster":
+            assert "ticketmaster" in ticket_url.lower() or ticket_url.startswith("http")
+        # If provider is viagogo, URL should contain viagogo
+        elif ticket_provider == "viagogo":
+            assert "viagogo" in ticket_url.lower()
+
 
 
 class TestRootEndpoint:

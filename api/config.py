@@ -16,6 +16,11 @@ TICKETMASTER_BASE_URL = "https://app.ticketmaster.com/discovery/v2"
 BOOKING_AFFILIATE_ID = os.getenv("BOOKING_AFFILIATE_ID", "TEST_AID")
 BOOKING_BASE_URL = "https://www.booking.com/searchresults.html"
 
+# Viagogo Configuration
+VIAGOGO_AFFILIATE_ID = os.getenv("VIAGOGO_AFFILIATE_ID", "TEST_VIAGOGO_AID")
+USE_VIAGOGO_MOCK = os.getenv("USE_VIAGOGO_MOCK", "true").lower() == "true"
+VIAGOGO_BASE_URL = "https://www.viagogo.com"
+
 # Default search parameters
 DEFAULT_COUNTRY_CODE = "IL"
 DEFAULT_CATEGORY = "music"

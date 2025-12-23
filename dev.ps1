@@ -20,7 +20,7 @@ if (-not (Test-Path ".\src\ui\frontend\node_modules")) {
 }
 
 Write-Host "🔧 Starting Backend (FastAPI) on http://localhost:8000" -ForegroundColor Green
-Write-Host "🎨 Starting Frontend (React) on http://localhost:3000" -ForegroundColor Green
+Write-Host "🎨 Starting Frontend (React) on http://localhost:8080" -ForegroundColor Green
 Write-Host ""
 Write-Host "Press Ctrl+C to stop both servers" -ForegroundColor Yellow
 Write-Host ""

@@ -19,17 +19,38 @@ Create `.env` file in project root:
 
 ```env
 TICKETMASTER_API_KEY=your_ticketmaster_api_key
+BOOKING_AFFILIATE_ID=TEST_AID
+
+# Viagogo Configuration
+VIAGOGGO_AFFILIATE_ID=TEST_VIAGOGO_AID
+USE_VIAGOGO_MOCK=true
 ```
 
-Get your API key from [Ticketmaster Developer Portal](https://developer.ticketmaster.com).
+Get your Ticketmaster API key from [Ticketmaster Developer Portal](https://developer.ticketmaster.com).
 
-### 3. Using Live Ticketmaster Data
+### 3. Event Discovery Sources
+
+EventPulse uses **multiple event sources** with priority-based fallback:
+
+1. **Viagogo** (Primary) - Tried first for event discovery
+2. **Ticketmaster** (Fallback) - Used if Viagogo returns no results
+
+**Viagogo Mock Mode:**
+
+By default, Viagogo runs in mock mode (`USE_VIAGOGO_MOCK=true`). To use a real Viagogo API (when available):
+
+```env
+USE_VIAGOGO_MOCK=false
+VIAGOGGO_AFFILIATE_ID=your_real_affiliate_id
+```
+
+**Ticketmaster Live Data:**
 
 The application runs in **Mock Mode** by default if no API key is set. To use live data:
 
-1.  Set `TICKETMASTER_API_KEY` in your `.env` file.
-    - If the key starts with `your_` or is `test`, mock mode is used.
-2.  Restart the backend server.
+1. Set `TICKETMASTER_API_KEY` in your `.env` file.
+   - If the key starts with `your_` or is `test`, mock mode is used.
+2. Restart the backend server.
 
 **Verify Live Data:**
 
@@ -76,15 +97,48 @@ dev.bat
 .venv\Scripts\python.exe -m uvicorn api.main:app --reload --port 8000
 
 # Terminal 2: Frontend  
+# Terminal 2: Frontend  
 cd src/ui/frontend && npm start
+# Note: This now starts the Vite dev server (port 8080 by default)
 ```
 
 **Access:**
 - 🔧 Backend API: http://localhost:8000
-- 🎨 Frontend UI: http://localhost:3000
+- 🎨 Frontend UI: http://localhost:8080
 - 📚 API Docs: http://localhost:8000/docs
 
+## Frontend Configuration
+
+The new frontend is built with Vite and React (shadcn/ui).
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VITE_API_BASE_URL` | Base URL for the backend API | `http://localhost:8000` |
+
+To change the API URL, edit `src/ui/frontend/.env` or set the environment variable.
+
+## Event Provider Fields
+
+EventPulse tracks two types of provider information:
+
+### `provider` Field
+Indicates where the event **metadata** came from:
+- `"viagogo"` - Event discovered via Viagogo
+- `"ticketmaster"` - Event discovered via Ticketmaster
+- `"web"` - Event discovered via web search (future)
+
+### `ticket_provider` Field
+Indicates who **sells** the ticket, determined by priority:
+1. **Ticketmaster** - Preferred when available
+2. **Official Site** - Direct from venue/artist (future)
+3. **Viagogo** - Fallback option
+
+The frontend displays:
+- **Event cards**: "Source: Viagogo" or "Source: Ticketmaster" badge
+- **Package modal**: "Tickets via [provider]" next to Buy Tickets button
+
 ## API Endpoints
+
 
 ### Health Check
 
