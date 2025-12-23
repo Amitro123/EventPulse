@@ -18,6 +18,17 @@ test_output.txt
 run_tests.py
 src/ui/frontend/description
 test_results.txt
+*.log
+*debug*.txt
+*debug*.log
+failure_data.json
+model_fields.txt
+source_info.txt
+reproduce_issue.py
+check_model_source.py
+run_test_and_capture.py
+verify_logic.py
+reproduction_output.txt
 
 # Git internal files (should not be in subdirectories)
 **/hooks/

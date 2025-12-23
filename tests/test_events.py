@@ -1,7 +1,7 @@
 """Tests for EventPulse API."""
 import os
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, Mock
 from fastapi.testclient import TestClient
 from api.main import app
 from api.collectors.ticketmaster import collect_events, _get_mock_events
@@ -147,11 +147,16 @@ class TestTicketmasterCollector:
 
         with patch("api.collectors.ticketmaster.config.TICKETMASTER_API_KEY", "test-key"):
             with patch("httpx.AsyncClient") as mock_client_cls:
+                # Create mock response (json() is synchronous in httpx)
+                mock_response_obj = AsyncMock()
+                mock_response_obj.status_code = 200
+                mock_response_obj.json = Mock(return_value=mock_response)
+                mock_response_obj.raise_for_status = Mock()
+                
+                # Configure mock client
                 mock_client = mock_client_cls.return_value
                 mock_client.__aenter__.return_value = mock_client
-                mock_client.get = AsyncMock()
-                mock_client.get.return_value.status_code = 200
-                mock_client.get.return_value.json.return_value = mock_response
+                mock_client.get = AsyncMock(return_value=mock_response_obj)
                 
                 events = await collect_events("2025-12-15", "Test City")
                 
@@ -192,11 +197,16 @@ class TestTicketmasterCollector:
 
         with patch("api.collectors.ticketmaster.config.TICKETMASTER_API_KEY", "test-key"):
             with patch("httpx.AsyncClient") as mock_client_cls:
+                # Create mock response (json() is synchronous in httpx)
+                mock_response_obj = AsyncMock()
+                mock_response_obj.status_code = 200
+                mock_response_obj.json = Mock(return_value=mock_response)
+                mock_response_obj.raise_for_status = Mock()
+                
+                # Configure mock client
                 mock_client = mock_client_cls.return_value
                 mock_client.__aenter__.return_value = mock_client
-                mock_client.get = AsyncMock()
-                mock_client.get.return_value.status_code = 200
-                mock_client.get.return_value.json.return_value = mock_response
+                mock_client.get = AsyncMock(return_value=mock_response_obj)
                 
                 events = await collect_events("2025-12-15")
                 
