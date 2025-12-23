@@ -444,6 +444,74 @@ class TestPackageTicketProviderPriority:
         # If provider is viagogo, URL should contain viagogo
         elif ticket_provider == "viagogo":
             assert "viagogo" in ticket_url.lower()
+    
+    def test_priority_ticketmaster_over_viagogo(self):
+        """Ticketmaster URL should be preferred over Viagogo provider/fallback."""
+        event_id = "test-mixed-priority"
+        from api.models.event import EventMention
+        
+        event = EventMention(
+            id=event_id,
+            text="Mixed Priority Event",
+            url="https://www.ticketmaster.com/event/123", # Primary is TM
+            timestamp="2025-12-15",
+            venue_name="Test Venue",
+            city="New York",
+            provider="viagogo", # Discovered via Viagogo
+            viagogo_url="https://www.viagogo.com/event/123" # Has fallback too
+        )
+        
+        with patch.dict("api.routes.events._events_cache", {event_id: event}):
+            response = client.get(f"/api/events/{event_id}/package")
+            data = response.json()
+            
+            # Should prioritize Ticketmaster because URL exists
+            assert data["tickets"]["ticket_provider"] == "ticketmaster"
+            assert "ticketmaster.com" in data["tickets"]["url"]
+    
+    def test_priority_viagogo_fallback(self):
+        """Viagogo URL should be used if no Ticketmaster URL exists."""
+        event_id = "test-viagogo-only"
+        from api.models.event import EventMention
+        
+        event = EventMention(
+            id=event_id,
+            text="Viagogo Only Event",
+            url="", # No primary URL or non-TM URL
+            timestamp="2025-12-15",
+            venue_name="Test Venue",
+            city="New York",
+            provider="viagogo",
+            viagogo_url="https://www.viagogo.com/event/456"
+        )
+        
+        with patch.dict("api.routes.events._events_cache", {event_id: event}):
+            response = client.get(f"/api/events/{event_id}/package")
+            data = response.json()
+            
+            assert data["tickets"]["ticket_provider"] == "viagogo"
+            assert "viagogo.com" in data["tickets"]["url"]
+    
+    def test_priority_livenation_is_ticketmaster(self):
+        """LiveNation URLs should be treated as Ticketmaster."""
+        event_id = "test-livenation"
+        from api.models.event import EventMention
+        
+        event = EventMention(
+            id=event_id,
+            text="LiveNation Event",
+            url="https://www.livenation.com/event/789",
+            timestamp="2025-12-15",
+            venue_name="Test Venue",
+            city="New York",
+            provider="web"
+        )
+        
+        with patch.dict("api.routes.events._events_cache", {event_id: event}):
+            response = client.get(f"/api/events/{event_id}/package")
+            data = response.json()
+            
+            assert data["tickets"]["ticket_provider"] == "ticketmaster"
 
 
 

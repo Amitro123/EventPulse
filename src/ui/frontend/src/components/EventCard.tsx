@@ -4,18 +4,17 @@ import { cn } from "@/lib/utils";
 
 export interface Event {
   id: string;
-  name: string;
-  artist?: string;
-  date: string;
-  time: string;
-  venue: string;
+  text: string; // Backend sends 'text', mapped to name in UI
+  venue_name: string;
   city: string;
-  category: string;
-  minPrice: number;
-  maxPrice: number;
-  currency: string;
-  image: string;
-  ticketUrl?: string;
+  date: string; // timestamp in backend
+  timestamp: string;
+  category?: string;
+  min_price?: number;
+  max_price?: number;
+  currency?: string;
+  image_url?: string;
+  url?: string; // ticket url
   provider?: string; // "viagogo" or "ticketmaster"
 }
 
@@ -25,7 +24,8 @@ interface EventCardProps {
 }
 
 const EventCard = ({ event, onViewPackage }: EventCardProps) => {
-  const formatPrice = (min: number, max: number, currency: string) => {
+  const formatPrice = (min?: number, max?: number, currency?: string) => {
+    if (!min || !currency) return "Price not available";
     if (min === max) return `${currency}${min}`;
     return `${currency}${min} - ${currency}${max}`;
   };
@@ -58,69 +58,69 @@ const EventCard = ({ event, onViewPackage }: EventCardProps) => {
           </div>
         )}
         <img
-          src={event.image}
-          alt={event.name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+          src={event.image_url || "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&q=80"}
+          alt={event.text}
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 transition-opacity group-hover:opacity-40" />
 
-        {/* Category Badge */}
-        <div
-          className={cn(
-            "absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r text-primary-foreground",
-            getCategoryColor(event.category)
-          )}
-        >
-          {event.category.charAt(0).toUpperCase() + event.category.slice(1)}
-        </div>
-
-        {/* Price Badge */}
-        <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-background/80 backdrop-blur-sm text-sm font-semibold">
-          {formatPrice(event.minPrice, event.maxPrice, event.currency)}
+        <div className="absolute top-2 left-2">
+          <div className={`px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r ${getCategoryColor(event.category || 'music')} text-white shadow-lg`}>
+            {event.category || 'Event'}
+          </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-5">
-        <h3 className="font-display font-bold text-lg mb-1 line-clamp-1 group-hover:text-primary transition-colors">
-          {event.name}
-        </h3>
-        {event.artist && (
-          <p className="text-primary text-sm font-medium mb-3">{event.artist}</p>
-        )}
+      <div className="p-5 flex flex-col h-[calc(100%-12rem)]">
+        <div className="mb-4">
+          <h3 className="font-display font-bold text-xl leading-tight mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+            {event.text}
+          </h3>
+          {/* Backend doesn't always separate artist, so we rely on text */}
+        </div>
 
-        <div className="space-y-2 mb-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Calendar className="w-4 h-4" />
-            <span>{event.date}</span>
-            <Clock className="w-4 h-4 ml-2" />
-            <span>{event.time}</span>
+        <div className="space-y-2 mb-auto">
+          <div className="flex items-center text-sm text-muted-foreground">
+            <Calendar className="w-4 h-4 mr-2 text-primary" />
+            <span className="truncate">{event.timestamp}</span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <MapPin className="w-4 h-4" />
-            <span className="line-clamp-1">{event.venue}, {event.city}</span>
+          <div className="flex items-center text-sm text-muted-foreground">
+            <Clock className="w-4 h-4 mr-2 text-primary" />
+            <span className="truncate">TBD</span>
+          </div>
+          <div className="flex items-center text-sm text-muted-foreground">
+            <MapPin className="w-4 h-4 mr-2 text-primary" />
+            <span className="truncate">{event.venue_name}, {event.city}</span>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex gap-2">
+        <div className="mt-4 pt-4 border-t border-border/50 flex items-center justify-between">
+          <span className="text-sm font-medium text-foreground/80">
+            {formatPrice(event.min_price, event.max_price, event.currency)}
+          </span>
           <Button
             variant="gradient"
             size="sm"
-            className="flex-1"
-            onClick={() => onViewPackage(event.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewPackage(event.id);
+            }}
           >
-            <Package className="w-4 h-4" />
+            <Package className="w-4 h-4 mr-2" />
             View Package
           </Button>
-          {event.ticketUrl && (
+          {event.url && (
             <Button
               variant="outline"
               size="sm"
               asChild
+              onClick={(e) => e.stopPropagation()}
+              className="hidden sm:inline-flex"
             >
-              <a href={event.ticketUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="w-4 h-4" />
+              <a href={event.url || "#"} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Direct
               </a>
             </Button>
           )}

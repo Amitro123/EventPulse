@@ -19,7 +19,7 @@ const PackageModal = ({ event, packageData, isLoading = false, isOpen, onClose }
   };
 
   // Generate Booking.com affiliate URL (mock)
-  const hotelUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(event.city)}&checkin=${event.date}&checkout=${event.date}&aid=TEST_AID`;
+  const hotelUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(event.city)}&checkin=${event.timestamp}&checkout=${event.timestamp}&aid=TEST_AID`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -32,18 +32,19 @@ const PackageModal = ({ event, packageData, isLoading = false, isOpen, onClose }
       {/* Modal */}
       <div className="relative glass-card max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slide-up">
         {/* Close Button */}
+        {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-lg hover:bg-secondary transition-colors"
+          className="absolute top-4 right-4 p-2 rounded-lg hover:bg-secondary transition-colors z-50 bg-black/20 backdrop-blur-sm"
         >
-          <X className="w-5 h-5" />
+          <X className="w-5 h-5 text-white" />
         </button>
 
         {/* Header Image */}
         <div className="relative h-56 overflow-hidden rounded-t-xl">
           <img
-            src={event.image}
-            alt={event.name}
+            src={event.image_url || "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&q=80"}
+            alt={event.text}
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent" />
@@ -51,21 +52,18 @@ const PackageModal = ({ event, packageData, isLoading = false, isOpen, onClose }
 
         {/* Content */}
         <div className="p-6">
-          <h2 className="font-display text-2xl font-bold mb-2">{event.name}</h2>
-          {event.artist && (
-            <p className="text-primary font-medium mb-4">{event.artist}</p>
-          )}
+          <h2 className="font-display text-2xl font-bold mb-2">{event.text}</h2>
 
           <div className="space-y-3 mb-6">
             <div className="flex items-center gap-3 text-muted-foreground">
               <Calendar className="w-5 h-5" />
-              <span>{event.date}</span>
+              <span>{event.timestamp}</span>
               <Clock className="w-5 h-5 ml-2" />
-              <span>{event.time}</span>
+              <span>TBD</span>
             </div>
             <div className="flex items-center gap-3 text-muted-foreground">
               <MapPin className="w-5 h-5" />
-              <span>{event.venue}, {event.city}</span>
+              <span>{event.venue_name}, {event.city}</span>
             </div>
           </div>
 
@@ -82,7 +80,7 @@ const PackageModal = ({ event, packageData, isLoading = false, isOpen, onClose }
                 <div>
                   <p className="font-semibold">Event Tickets</p>
                   <p className="text-sm text-muted-foreground">
-                    {formatPrice(event.minPrice, event.maxPrice, event.currency)}
+                    {formatPrice(event.min_price, event.max_price, event.currency)}
                   </p>
                 </div>
               </div>
@@ -103,7 +101,7 @@ const PackageModal = ({ event, packageData, isLoading = false, isOpen, onClose }
                 <div className="text-sm text-muted-foreground">Tickets not available</div>
               ) : (
                 <Button variant="gradient" size="sm" asChild>
-                  <a href={event?.ticketUrl || "#"} target="_blank" rel="noopener noreferrer">
+                  <a href={event?.url || "#"} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="w-4 h-4" />
                     Buy Tickets
                   </a>

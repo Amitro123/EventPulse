@@ -127,38 +127,40 @@ class ViagogoCollector(EventCollector):
         return [
             EventMention(
                 id=f"viagogo-artist-1",
-                text=f"{artist} - World Tour",
-                url=self._build_viagogo_url(f"{artist_slug}-world-tour"),
+                text=f"{artist} - The Chromatica Ball",
+                url=self._build_viagogo_url(f"{artist_slug}-chromatica-ball"),
                 timestamp=base_date,
                 venue_name="O2 Arena",
                 city="London",
                 category="music",
-                image_url=f"https://via.placeholder.com/300x200?text={artist.replace(' ', '+')}",
+                image_url="https://images.unsplash.com/photo-1459749411177-27352851d941?w=800&q=80",
                 price_range="$120 - $550",
                 min_price=120.0,
                 max_price=550.0,
                 currency="USD",
                 scores={"popularity": 0.85},
                 provider="viagogo",
-                viagogo_url=self._build_viagogo_url(f"{artist_slug}-world-tour")
+                ticket_provider="viagogo",
+                viagogo_url=self._build_viagogo_url(f"{artist_slug}-chromatica-ball")
             ),
             EventMention(
                 id=f"viagogo-artist-2",
-                text=f"{artist} - Live in Concert",
-                url=self._build_viagogo_url(f"{artist_slug}-live"),
+                text=f"{artist} - Las Vegas Residency",
+                url=self._build_viagogo_url(f"{artist_slug}-vegas-residency"),
                 timestamp=base_date,
-                venue_name="Wembley Stadium",
-                city="London",
+                venue_name="Dolby Live",
+                city="Las Vegas",
                 category="music",
-                image_url=f"https://via.placeholder.com/300x200?text={artist.replace(' ', '+')}",
-                price_range="$85 - $400",
-                min_price=85.0,
-                max_price=400.0,
+                image_url="https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=800&q=80",
+                price_range="$250 - $800",
+                min_price=250.0,
+                max_price=800.0,
                 currency="USD",
-                scores={"popularity": 0.82},
+                scores={"popularity": 0.95},
                 provider="viagogo",
-                viagogo_url=self._build_viagogo_url(f"{artist_slug}-live")
-            ),
+                ticket_provider="viagogo",
+                viagogo_url=self._build_viagogo_url(f"{artist_slug}-vegas-residency")
+            )
         ]
 
 

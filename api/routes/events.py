@@ -136,50 +136,59 @@ def _determine_ticket_info(event: EventMention) -> TicketsInfo:
     
     Priority order:
     1. Ticketmaster URL -> ticket_provider="ticketmaster"
+       (Checks if URL contains 'ticketmaster' OR provider is 'ticketmaster')
     2. Official site URL -> ticket_provider="official_site" (future)
     3. Viagogo URL -> ticket_provider="viagogo" (with affiliate)
     4. None -> no tickets available
     """
-    # Priority 1: If event has a Ticketmaster URL
-    if event.provider == "ticketmaster" and event.url:
+    # Helper to check if a URL is a Ticketmaster URL
+    def is_ticketmaster_url(url: Optional[str]) -> bool:
+        if not url:
+            return False
+        return "ticketmaster" in url.lower() or "livenation" in url.lower()
+
+    # Priority 1: Ticketmaster
+    # If the primary URL is TM, use it.
+    if is_ticketmaster_url(event.url):
         return TicketsInfo(
             url=event.url,
             ticket_provider="ticketmaster"
         )
     
-    # Priority 2: Official site URL (placeholder for future WebSearchCollector)
-    # TODO: Check for official_site_url field when available
+    # If the provider says TM and we have a URL (even if domain is obscure), trust it as primary
+    if event.provider == "ticketmaster" and event.url:
+         return TicketsInfo(
+            url=event.url,
+            ticket_provider="ticketmaster"
+        )
+    
+    # Priority 2: Official site URL (placeholder)
     # if event.official_site_url:
     #     return TicketsInfo(url=event.official_site_url, ticket_provider="official_site")
     
-    # Priority 3: Viagogo URL as fallback
+    # Priority 3: Viagogo
+    # Check specific viagogo_url field first
     if event.viagogo_url:
-        # Viagogo URL already includes affiliate ID from collector
         return TicketsInfo(
             url=event.viagogo_url,
             ticket_provider="viagogo"
         )
     
-    # If we have any URL at all (e.g., from Viagogo provider), use it
+    # Check if primary URL is Viagogo
+    if event.url and "viagogo" in event.url.lower():
+        return TicketsInfo(
+            url=event.url,
+            ticket_provider="viagogo"
+        )
+            
+    # Priority 4: If we have a URL but don't recognize the provider, return it with the event's provider
     if event.url:
-        # Determine provider based on URL or event.provider
-        if "viagogo" in event.url.lower():
-            return TicketsInfo(
-                url=event.url,
-                ticket_provider="viagogo"
-            )
-        elif "ticketmaster" in event.url.lower():
-            return TicketsInfo(
-                url=event.url,
-                ticket_provider="ticketmaster"
-            )
-        else:
-            return TicketsInfo(
-                url=event.url,
-                ticket_provider=event.provider
-            )
+        return TicketsInfo(
+            url=event.url,
+            ticket_provider=event.provider
+        )
     
-    # Priority 4: No tickets available
+    # No tickets available
     return TicketsInfo(url=None, ticket_provider=None)
 
 
@@ -212,6 +221,7 @@ async def get_event_package(
             category="music",
             provider="ticketmaster"
         )
+
     
     # Calculate check-in/check-out dates
     event_date = datetime.strptime(event.timestamp, "%Y-%m-%d")

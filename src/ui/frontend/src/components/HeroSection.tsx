@@ -1,4 +1,4 @@
-import { Search, MapPin, Calendar, Music, Trophy, Palette, Users } from "lucide-react";
+import { Search, MapPin, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import heroImage from "@/assets/hero-concert.jpg";
@@ -7,9 +7,11 @@ interface HeroSectionProps {
   onSearch: (query: string) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  isLoading?: boolean;
+  resultCount?: number;
 }
 
-const HeroSection = ({ onSearch, searchQuery, onSearchChange }: HeroSectionProps) => {
+const HeroSection = ({ onSearch, searchQuery, onSearchChange, isLoading = false, resultCount }: HeroSectionProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSearch(searchQuery);
@@ -52,7 +54,7 @@ const HeroSection = ({ onSearch, searchQuery, onSearchChange }: HeroSectionProps
         </p>
 
         {/* Search Form */}
-        <form onSubmit={handleSubmit} className="animate-slide-up-delay-3 max-w-3xl mx-auto">
+        <form onSubmit={handleSubmit} className="animate-slide-up-delay-3 max-w-3xl mx-auto mb-12">
           <div className="glass-card p-2 flex flex-col md:flex-row gap-2">
             <div className="flex-1 relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -67,15 +69,24 @@ const HeroSection = ({ onSearch, searchQuery, onSearchChange }: HeroSectionProps
               <MapPin className="w-5 h-5 text-muted-foreground" />
               <span className="text-muted-foreground">All Locations</span>
             </div>
-            <Button type="submit" variant="hero" size="lg">
-              <Search className="w-5 h-5" />
-              Search Events
+            <Button type="submit" variant="hero" size="lg" disabled={isLoading}>
+              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
+              {isLoading ? "Searching..." : "Search Events"}
             </Button>
           </div>
+
+          {/* Result Count Subtitle */}
+          {!isLoading && searchQuery && resultCount !== undefined && (
+            <div className="mt-4 animate-fade-in text-muted-foreground font-medium">
+              {resultCount === 0
+                ? `No events found for "${searchQuery}"`
+                : `Found ${resultCount} events for "${searchQuery}"`}
+            </div>
+          )}
         </form>
 
         {/* Quick Stats */}
-        <div className="animate-slide-up-delay-3 mt-16 flex flex-wrap justify-center gap-8 md:gap-16">
+        <div className="animate-slide-up-delay-3 mt-8 flex flex-wrap justify-center gap-8 md:gap-16">
           <div className="text-center">
             <div className="text-3xl md:text-4xl font-bold gradient-text">10K+</div>
             <div className="text-sm text-muted-foreground">Live Events</div>
