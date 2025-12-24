@@ -30,6 +30,6 @@ class EventCollector(ABC):
         pass
 
     @abstractmethod
-    async def search_by_artist(self, query: ArtistSearchQuery) -> List[EventMention]:
-        """Search events by artist."""
+    async def search_by_artist(self, query: ArtistSearchQuery) -> tuple[List[EventMention], int]:
+        """Search events by artist. Returns (events, total_count)."""
         pass

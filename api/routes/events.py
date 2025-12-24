@@ -4,7 +4,8 @@ from fastapi import APIRouter, Query, Path, HTTPException
 from typing import List, Optional
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
-from api.models.event import EventMention, EventPackageResponse, TicketsInfo, HotelsInfo
+import logging
+from api.models.event import EventMention, EventPackageResponse, TicketsInfo, HotelsInfo, PaginatedEvents
 from api.collectors.ticketmaster import TicketmasterCollector
 from api.collectors.viagogo import ViagogoCollector
 from api.services.collector import MultiCollector
@@ -13,11 +14,11 @@ from api import config
 
 router = APIRouter(prefix="/api", tags=["events"])
 
-# Initialize MultiCollector with Viagogo first (priority), then Ticketmaster (fallback)
+# Initialize MultiCollector with Ticketmaster first (primary), then Viagogo (fallback)
 # Order matters: first collector in list has highest priority
 _multi_collector = MultiCollector(collectors=[
-    ViagogoCollector(),     # Primary: Viagogo for event discovery
-    TicketmasterCollector() # Fallback: Ticketmaster if Viagogo returns empty
+    TicketmasterCollector(), # Primary: Ticketmaster for event discovery
+    ViagogoCollector()      # Fallback: Viagogo if Ticketmaster returns empty
 ])
 
 # In-memory cache for events (simulates storage for package lookup)
@@ -89,7 +90,7 @@ async def search_events(
     return events
 
 
-@router.get("/events/by-artist", response_model=List[EventMention])
+@router.get("/events/by-artist", response_model=PaginatedEvents)
 async def search_events_by_artist(
     artist: str = Query(
         ...,
@@ -111,7 +112,7 @@ async def search_events_by_artist(
     ),
     limit: int = Query(default=20, ge=1, le=100, description="Max events to return"),
     page: int = Query(default=0, ge=0, description="Page number (0-indexed)")
-) -> List[EventMention]:
+) -> PaginatedEvents:
     """
     Search for events by artist/performer name.
     
@@ -125,21 +126,35 @@ async def search_events_by_artist(
         limit=limit,
         page=page
     )
-    events = await _multi_collector.search_by_artist(query)
+    events, total = await _multi_collector.search_by_artist(query)
     _cache_events(events)
-    return events
+    
+    logging.info(f"Artist search for {artist}: found {len(events)} events (total: {total})")
+    
+    # Calculate has_more
+    has_more = total > (page + 1) * limit
+    
+    return PaginatedEvents(
+        events=events,
+        pagination={
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "has_more": has_more
+        }
+    )
 
 
-def _determine_ticket_info(event: EventMention) -> TicketsInfo:
+def _determine_ticket_info(event: EventMention, tm_url: Optional[str] = None) -> TicketsInfo:
     """
     Determine the best ticket source based on provider priority.
     
     Priority order:
-    1. Ticketmaster URL -> ticket_provider="ticketmaster"
-       (Checks if URL contains 'ticketmaster' OR provider is 'ticketmaster')
-    2. Official site URL -> ticket_provider="official_site" (future)
-    3. Viagogo URL -> ticket_provider="viagogo" (with affiliate)
-    4. None -> no tickets available
+    1. Resolved Ticketmaster URL (tm_url) -> ticket_provider="ticketmaster"
+    2. Primary Event URL if it's Ticketmaster -> ticket_provider="ticketmaster"
+    3. Official site URL -> ticket_provider="official_site" (future)
+    4. Viagogo URL -> ticket_provider="viagogo" (with affiliate)
+    5. Fallback to event.url
     """
     # Helper to check if a URL is a Ticketmaster URL
     def is_ticketmaster_url(url: Optional[str]) -> bool:
@@ -147,48 +162,55 @@ def _determine_ticket_info(event: EventMention) -> TicketsInfo:
             return False
         return "ticketmaster" in url.lower() or "livenation" in url.lower()
 
-    # Priority 1: Ticketmaster
-    # If the primary URL is TM, use it.
+    # Priority 0: Cancelled/Unavailable
+    # Only set tickets.url = null when the event is cancelled
+    if not event.has_tickets and event.provider == "ticketmaster":
+        return TicketsInfo(url=None, ticket_provider="ticketmaster")
+
+    # Priority 1: Resolved Ticketmaster
+    if tm_url:
+        return TicketsInfo(
+            url=tm_url,
+            ticket_provider="ticketmaster"
+        )
+
+    # Priority 2: Primary Event URL (if TM)
     if is_ticketmaster_url(event.url):
         return TicketsInfo(
             url=event.url,
             ticket_provider="ticketmaster"
         )
     
-    # If the provider says TM and we have a URL (even if domain is obscure), trust it as primary
     if event.provider == "ticketmaster" and event.url:
          return TicketsInfo(
             url=event.url,
             ticket_provider="ticketmaster"
         )
     
-    # Priority 2: Official site URL (placeholder)
+    # Priority 3: Official site URL (placeholder)
     # if event.official_site_url:
     #     return TicketsInfo(url=event.official_site_url, ticket_provider="official_site")
     
-    # Priority 3: Viagogo
-    # Check specific viagogo_url field first
+    # Priority 4: Viagogo
     if event.viagogo_url:
         return TicketsInfo(
             url=event.viagogo_url,
             ticket_provider="viagogo"
         )
     
-    # Check if primary URL is Viagogo
     if event.url and "viagogo" in event.url.lower():
         return TicketsInfo(
             url=event.url,
             ticket_provider="viagogo"
         )
             
-    # Priority 4: If we have a URL but don't recognize the provider, return it with the event's provider
+    # Priority 5: Fallback
     if event.url:
         return TicketsInfo(
             url=event.url,
             ticket_provider=event.provider
         )
     
-    # No tickets available
     return TicketsInfo(url=None, ticket_provider=None)
 
 
@@ -228,8 +250,16 @@ async def get_event_package(
     check_in = event.timestamp
     check_out = (event_date + timedelta(days=1)).strftime("%Y-%m-%d")
     
+    # Try to resolve a matching Ticketmaster event for priority selling
+    tm_url = None
+    # We always check TM even if provider is Viagogo
+    tm_collector = TicketmasterCollector()
+    tm_match = await tm_collector.resolve_event(event.text, event.city, event.timestamp)
+    if tm_match:
+        tm_url = tm_match.url
+        
     # Determine ticket source using priority logic
-    tickets = _determine_ticket_info(event)
+    tickets = _determine_ticket_info(event, tm_url=tm_url)
     
     # Update event's ticket_provider for consistency
     event_with_ticket_provider = event.model_copy(update={

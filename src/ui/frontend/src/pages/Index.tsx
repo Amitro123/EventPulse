@@ -13,20 +13,22 @@ const Index = () => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
+  const [shouldScroll, setShouldScroll] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   // Debounce search query could be added here for optimization, but for now passing directly
-  const { data: events, isLoading, error } = useSearchEvents(searchQuery, selectedCategory);
+  const { events, isLoading, error, hasMore, loadMore } = useSearchEvents(searchQuery, selectedCategory);
 
-  // Auto-scroll to results when they load
+  // Auto-scroll to results when they load after an explicit search
   useEffect(() => {
-    if (!isLoading && events && events.length > 0 && searchQuery) {
+    if (shouldScroll && !isLoading && events && events.length > 0) {
       // Small timeout to ensure DOM is ready
       setTimeout(() => {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setShouldScroll(false);
       }, 100);
     }
-  }, [events, isLoading, searchQuery]);
+  }, [events, isLoading, shouldScroll]);
 
   // Fetch package data when an event is selected
   const { data: packageData, isLoading: isPackageLoading } = useEventPackage(
@@ -36,6 +38,7 @@ const Index = () => {
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
+    setShouldScroll(true);
   };
 
   const handleViewPackage = (eventId: string) => {
@@ -81,12 +84,23 @@ const Index = () => {
             </div>
           </div>
         ) : (
-          <EventsGrid
-            events={events || []}
-            onViewPackage={handleViewPackage}
-            title={searchQuery ? `Results for "${searchQuery}"` : "Featured Events"}
-            subtitle={searchQuery ? "found matching events" : "Discover the hottest events happening near you"}
-          />
+          <div className="flex flex-col items-center gap-8 pb-12">
+            <EventsGrid
+              events={events || []}
+              onViewPackage={handleViewPackage}
+              title={searchQuery ? `Results for "${searchQuery}"` : "Featured Events"}
+              subtitle={searchQuery ? "found matching events" : "Discover the hottest events happening near you"}
+            />
+
+            {hasMore && (
+              <button
+                onClick={() => loadMore()}
+                className="px-6 py-2 bg-primary text-primary-foreground rounded-full font-medium hover:bg-primary/90 transition-colors"
+              >
+                Load More Events
+              </button>
+            )}
+          </div>
         )}
       </div>
 

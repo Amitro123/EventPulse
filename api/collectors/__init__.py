@@ -1,5 +1,6 @@
 """API collectors package."""
-from api.collectors.ticketmaster import collect_events, search_by_artist
+from api.collectors.ticketmaster import TicketmasterCollector
+from api.collectors.viagogo import ViagogoCollector
 
-__all__ = ["collect_events", "search_by_artist"]
+__all__ = ["TicketmasterCollector", "ViagogoCollector"]
 

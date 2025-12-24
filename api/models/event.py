@@ -23,7 +23,22 @@ class EventMention(BaseModel):
     raw_data: Optional[dict] = None
     provider: str = "ticketmaster"  # Where event METADATA came from: "viagogo", "ticketmaster", "web"
     ticket_provider: Optional[str] = None  # Who sells the ticket: "ticketmaster", "viagogo", "official_site"
+    has_tickets: bool = False  # True if event is not cancelled/sold out
     viagogo_url: Optional[str] = None  # Viagogo event URL for fallback ticket source
+
+
+class PaginationMetadata(BaseModel):
+    """Metadata for paginated results."""
+    total: int
+    page: int
+    limit: int
+    has_more: bool
+
+
+class PaginatedEvents(BaseModel):
+    """Response model for paginated event lists."""
+    events: list[EventMention]
+    pagination: PaginationMetadata
 
 
 class HealthResponse(BaseModel):

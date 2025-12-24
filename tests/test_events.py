@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import patch, AsyncMock, Mock
 from fastapi.testclient import TestClient
 from api.main import app
-from api.collectors.ticketmaster import collect_events, _get_mock_events
+from api.collectors.ticketmaster import TicketmasterCollector, EventSearchQuery, ArtistSearchQuery
 
 
 client = TestClient(app)
@@ -71,21 +71,24 @@ class TestTicketmasterCollector:
     
     def test_mock_events_returns_data(self):
         """Mock events should return sample data."""
-        events = _get_mock_events("2025-12-15", "Tel Aviv", "music")
+        collector = TicketmasterCollector()
+        events = collector._get_mock_events("2025-12-15", "Tel Aviv", "music")
         assert len(events) > 0
         assert events[0].id == "mock-1"
         assert "Coldplay" in events[0].text
     
     def test_mock_events_with_none_params(self):
         """Mock events should work with None city/category."""
-        events = _get_mock_events("2025-12-15")
+        collector = TicketmasterCollector()
+        events = collector._get_mock_events("2025-12-15")
         assert len(events) > 0
         assert events[0].city == "Tel Aviv"  # Default city
         assert events[0].category == "music"  # Default category
     
     def test_mock_events_have_required_fields(self):
         """Mock events should have all required fields."""
-        events = _get_mock_events("2025-12-15", "Tel Aviv", "music")
+        collector = TicketmasterCollector()
+        events = collector._get_mock_events("2025-12-15", "Tel Aviv", "music")
         for event in events:
             assert event.id
             assert event.text
@@ -98,7 +101,9 @@ class TestTicketmasterCollector:
     async def test_collect_events_without_api_key(self):
         """Collector should return mock data when no API key."""
         with patch("api.collectors.ticketmaster.config.TICKETMASTER_API_KEY", ""):
-            events = await collect_events("2025-12-15", "Tel Aviv", "music")
+            collector = TicketmasterCollector()
+            query = EventSearchQuery(date="2025-12-15", city="Tel Aviv", category="music")
+            events = await collector.search(query)
             assert len(events) > 0
             # Should be mock data
             assert events[0].id.startswith("mock")
@@ -113,8 +118,10 @@ class TestTicketmasterCollector:
                 # client.get must be awaitable
                 mock_client.get = AsyncMock(side_effect=Exception("API Error"))
                 
-                events = await collect_events("2025-12-15", "Tel Aviv", "music")
-                # Should return empty list on error
+                collector = TicketmasterCollector()
+                query = EventSearchQuery(date="2025-12-15", city="Tel Aviv", category="music")
+                events = await collector.search(query)
+                # Should return empty list on error when API key is present
                 assert events == []
 
     @pytest.mark.asyncio
@@ -158,7 +165,9 @@ class TestTicketmasterCollector:
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.get = AsyncMock(return_value=mock_response_obj)
                 
-                events = await collect_events("2025-12-15", "Test City")
+                collector = TicketmasterCollector()
+                query = EventSearchQuery(date="2025-12-15", city="Test City")
+                events = await collector.search(query)
                 
                 assert len(events) == 1
                 e = events[0]
@@ -208,7 +217,9 @@ class TestTicketmasterCollector:
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.get = AsyncMock(return_value=mock_response_obj)
                 
-                events = await collect_events("2025-12-15")
+                collector = TicketmasterCollector()
+                query = EventSearchQuery(date="2025-12-15")
+                events = await collector.search(query)
                 
                 assert len(events) == 1
                 e = events[0]
@@ -216,6 +227,82 @@ class TestTicketmasterCollector:
                 assert e.max_price is None
                 assert e.venue_lat is None
                 assert e.venue_lng is None
+    
+    @pytest.mark.asyncio
+    async def test_has_tickets_flag_when_prices_missing(self):
+        """Collector should set has_tickets even if priceRanges is missing."""
+        mock_response = {
+            "_embedded": {
+                "events": [
+                    {
+                        "id": "test-3",
+                        "name": "Event No Prices",
+                        "url": "http://example.com",
+                        "dates": {
+                            "start": {"localDate": "2025-12-15"},
+                            "status": {"code": "onsale"}
+                        },
+                        # priceRanges missing
+                        "_embedded": {
+                            "venues": [{"name": "Venue", "city": {"name": "City"}}]
+                        }
+                    }
+                ]
+            }
+        }
+
+        with patch("api.collectors.ticketmaster.config.TICKETMASTER_API_KEY", "test-key"):
+            with patch("httpx.AsyncClient") as mock_client_cls:
+                mock_response_obj = AsyncMock()
+                mock_response_obj.status_code = 200
+                mock_response_obj.json = Mock(return_value=mock_response)
+                mock_response_obj.raise_for_status = Mock()
+                
+                mock_client = mock_client_cls.return_value
+                mock_client.__aenter__.return_value = mock_client
+                mock_client.get = AsyncMock(return_value=mock_response_obj)
+                
+                collector = TicketmasterCollector()
+                query = EventSearchQuery(date="2025-12-15")
+                events = await collector.search(query)
+                
+                assert len(events) == 1
+                assert events[0].has_tickets is True
+                assert events[0].price_range is None
+    
+    @pytest.mark.asyncio
+    async def test_artist_pagination(self):
+        """Collector should support pagination."""
+        # Mock response with pagination
+        mock_response = {
+            "_embedded": {
+                "events": [{"id": "1", "name": "E1", "dates": {"start": {"localDate": "2025-01-01"}}}]
+            },
+            "page": {
+                "size": 20,
+                "totalElements": 50,
+                "totalPages": 3,
+                "number": 0
+            }
+        }
+
+        with patch("api.collectors.ticketmaster.config.TICKETMASTER_API_KEY", "test-key"):
+            with patch("httpx.AsyncClient") as mock_client_cls:
+                mock_response_obj = AsyncMock()
+                mock_response_obj.status_code = 200
+                mock_response_obj.json = Mock(return_value=mock_response)
+                mock_response_obj.raise_for_status = Mock()
+                
+                mock_client = mock_client_cls.return_value
+                mock_client.__aenter__.return_value = mock_client
+                mock_client.get = AsyncMock(return_value=mock_response_obj)
+                
+                collector = TicketmasterCollector()
+                query = ArtistSearchQuery(artist="Test", page=0, limit=20)
+                events, total = await collector.search_by_artist(query)
+                
+                assert len(events) == 1
+                assert total == 50
 
 
 class TestByArtistEndpoint:
@@ -237,11 +324,11 @@ class TestByArtistEndpoint:
         response = client.get("/api/events/by-artist?artist=Coldplay")
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) > 0  # Should return mock artist events
-        # Verify artist name is in event text
-        assert any("Coldplay" in event["text"] for event in data)
-    
+        assert "events" in data
+        assert isinstance(data["events"], list)
+        assert len(data["events"]) > 0
+        assert any("Coldplay" in e["text"] for e in data["events"])
+
     def test_by_artist_with_date_range(self):
         """By-artist endpoint should accept date range params."""
         response = client.get(
@@ -249,7 +336,8 @@ class TestByArtistEndpoint:
         )
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
+        assert "events" in data
+        assert isinstance(data["events"], list)
     
     def test_by_artist_validates_date_format(self):
         """By-artist endpoint should validate date formats."""
@@ -259,16 +347,23 @@ class TestByArtistEndpoint:
     def test_by_artist_with_all_params(self):
         """By-artist endpoint should accept all parameters."""
         response = client.get(
-            "/api/events/by-artist?artist=Taylor%20Swift&date_from=2025-06-01&date_to=2025-12-31&country_code=US&limit=50"
+            "/api/events/by-artist?artist=Taylor%20Swift&date_from=2025-06-01&date_to=2025-12-31&country_code=US&limit=50&page=0"
         )
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
+        assert "events" in data
+        assert isinstance(data["events"], list)
 
 
 class TestPackageEndpoint:
     """Tests for event package endpoint."""
     
+    @pytest.fixture(autouse=True)
+    def mock_api_key(self):
+        """Force mock mode for these tests."""
+        with patch("api.config.TICKETMASTER_API_KEY", "test"):
+            yield
+
     def _get_first_event_id(self):
         """Helper to get first event ID from search results."""
         response = client.get("/api/events?date=2025-12-15")
@@ -407,6 +502,12 @@ class TestPackageEndpoint:
 class TestPackageTicketProviderPriority:
     """Tests for ticket provider priority logic in package endpoint."""
     
+    @pytest.fixture(autouse=True)
+    def mock_api_key(self):
+        """Force mock mode for these tests."""
+        with patch("api.config.TICKETMASTER_API_KEY", "test"):
+            yield
+
     def test_ticketmaster_event_uses_ticketmaster_provider(self):
         """Events from Ticketmaster should have ticket_provider='ticketmaster'."""
         # Search should populate cache with events
@@ -523,6 +624,42 @@ class TestPackageTicketProviderPriority:
             
             assert data["tickets"]["ticket_provider"] == "ticketmaster"
 
+    @pytest.mark.asyncio
+    async def test_priority_resolved_ticketmaster_over_viagogo(self):
+        """Should use resolved Ticketmaster URL even if event was discovered via Viagogo."""
+        event_id = "test-resolved-tm"
+        from api.models.event import EventMention
+        
+        event = EventMention(
+            id=event_id,
+            text="Viagogo Event",
+            url="https://www.viagogo.com/event/123",
+            timestamp="2025-12-15",
+            venue_name="Test Venue",
+            city="New York",
+            provider="viagogo"
+        )
+        
+        resolved_tm_event = EventMention(
+            id="tm-123",
+            text="Ticketmaster Match",
+            url="https://www.ticketmaster.com/event/match",
+            timestamp="2025-12-15",
+            venue_name="Test Venue",
+            city="New York",
+            provider="ticketmaster"
+        )
+        
+        with patch.dict("api.routes.events._events_cache", {event_id: event}):
+            with patch("api.collectors.ticketmaster.TicketmasterCollector.resolve_event", new_callable=AsyncMock) as mock_resolve:
+                mock_resolve.return_value = resolved_tm_event
+                
+                response = client.get(f"/api/events/{event_id}/package")
+                data = response.json()
+                
+                assert data["tickets"]["ticket_provider"] == "ticketmaster"
+                assert data["tickets"]["url"] == "https://www.ticketmaster.com/event/match"
+
 
 
 class TestRootEndpoint:
@@ -547,11 +684,13 @@ class TestLiveIntegration:
     async def test_live_ticketmaster_search(self):
         """Should fetch real events from Ticketmaster."""
         # Ensure we have a valid key in env before running
-        events = await collect_events(
+        collector = TicketmasterCollector()
+        query = EventSearchQuery(
             date="2025-12-15",
             country_code="US",
             limit=5
         )
+        events = await collector.search(query)
         
         # We expect some result or at least a graceful empty list
         assert isinstance(events, list)

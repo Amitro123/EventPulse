@@ -91,9 +91,9 @@ const PackageModal = ({ event, packageData, isLoading = false, isOpen, onClose }
                     <ExternalLink className="w-4 h-4" />
                     Buy Tickets
                     <span className="ml-2 text-xs opacity-75">
-                      via {packageData.tickets.ticket_provider === 'viagogo' ? 'Viagogo' :
+                      (Tickets via {packageData.tickets.ticket_provider === 'viagogo' ? 'Viagogo' :
                         packageData.tickets.ticket_provider === 'ticketmaster' ? 'Ticketmaster' :
-                          packageData.tickets.ticket_provider}
+                          packageData.tickets.ticket_provider})
                     </span>
                   </a>
                 </Button>

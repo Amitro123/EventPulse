@@ -20,7 +20,7 @@ class MockCollector(EventCollector):
 
     async def search_by_artist(self, query: ArtistSearchQuery):
         self.search_by_artist_called = True
-        return self.artist_events
+        return self.artist_events, len(self.artist_events)
 
 @pytest.mark.asyncio
 async def test_multicollector_aggregation():
@@ -72,10 +72,11 @@ async def test_artist_search_aggregation():
     service = MultiCollector(collectors=[c1])
     
     query = ArtistSearchQuery(artist="Test Artist")
-    events = await service.search_by_artist(query)
+    events, total = await service.search_by_artist(query)
     
     assert len(events) == 1
     assert events[0].text == "Artist Event 1"
+    assert total == 1
 
 
 # =========================================
@@ -174,11 +175,12 @@ async def test_multicollector_artist_search_priority():
     service = MultiCollector(collectors=[viagogo_collector, ticketmaster_collector])
     
     query = ArtistSearchQuery(artist="Test Artist")
-    events = await service.search_by_artist(query)
+    events, total = await service.search_by_artist(query)
     
     # Should get Viagogo artist events (priority fallback)
     assert len(events) == 1
     assert events[0].provider == "viagogo"
+    assert total == 1
     # Ticketmaster should NOT be called since Viagogo returned results
     assert viagogo_collector.search_by_artist_called is True
     assert ticketmaster_collector.search_by_artist_called is False

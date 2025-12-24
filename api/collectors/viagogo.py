@@ -5,7 +5,7 @@ Currently uses mock data - swap the mock methods for real API calls
 when Viagogo API becomes available.
 """
 import httpx
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from api.models.event import EventMention
 from api import config
 from api.collectors.base import EventCollector, EventSearchQuery, ArtistSearchQuery
@@ -36,14 +36,14 @@ class ViagogoCollector(EventCollector):
         # return await self._fetch_events_from_api(query)
         return []
 
-    async def search_by_artist(self, query: ArtistSearchQuery) -> List[EventMention]:
+    async def search_by_artist(self, query: ArtistSearchQuery) -> Tuple[List[EventMention], int]:
         """Search events by artist using Viagogo."""
         if self.use_mock:
             return self._get_mock_artist_events(query.artist, query.date_from)
         
         # TODO: Implement real Viagogo API call when available
         # return await self._fetch_artist_events_from_api(query)
-        return []
+        return [], 0
 
     def _build_viagogo_url(self, event_slug: str) -> str:
         """Build a Viagogo event URL with affiliate parameter."""
@@ -76,6 +76,7 @@ class ViagogoCollector(EventCollector):
                 currency="USD",
                 scores={"popularity": 0.88},
                 provider="viagogo",
+                ticket_provider="viagogo",
                 viagogo_url=self._build_viagogo_url("bruno-mars-24k-magic")
             ),
             EventMention(
@@ -93,6 +94,7 @@ class ViagogoCollector(EventCollector):
                 currency="USD",
                 scores={"popularity": 0.91},
                 provider="viagogo",
+                ticket_provider="viagogo",
                 viagogo_url=self._build_viagogo_url("the-weeknd-after-hours")
             ),
             EventMention(
@@ -110,6 +112,7 @@ class ViagogoCollector(EventCollector):
                 currency="USD",
                 scores={"popularity": 0.96},
                 provider="viagogo",
+                ticket_provider="viagogo",
                 viagogo_url=self._build_viagogo_url("adele-weekends")
             ),
         ]
@@ -119,7 +122,7 @@ class ViagogoCollector(EventCollector):
         self,
         artist: str,
         date_from: Optional[str] = None
-    ) -> List[EventMention]:
+    ) -> Tuple[List[EventMention], int]:
         """Return mock artist-specific events from Viagogo."""
         base_date = date_from or "2025-06-15"
         artist_slug = artist.lower().replace(" ", "-")

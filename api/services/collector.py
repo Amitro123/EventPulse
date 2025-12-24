@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Multi-collector service for orchestrating event collectors."""
-from typing import List, Dict
+from typing import List, Dict, Tuple
 import logging
 from api.collectors.base import EventCollector, EventSearchQuery, ArtistSearchQuery
 from api.models.event import EventMention
@@ -51,7 +51,7 @@ class MultiCollector:
         logger.warning("All collectors returned empty results")
         return []
 
-    async def search_by_artist(self, query: ArtistSearchQuery) -> List[EventMention]:
+    async def search_by_artist(self, query: ArtistSearchQuery) -> Tuple[List[EventMention], int]:
         """
         Search by artist using priority-based fallback.
         
@@ -62,12 +62,12 @@ class MultiCollector:
             provider_name = collector.__class__.__name__
             try:
                 logger.info(f"Trying {provider_name} for artist search: {query.artist}")
-                events = await collector.search_by_artist(query)
+                events, total = await collector.search_by_artist(query)
                 
                 if events:
                     count = len(events)
-                    logger.info(f"Got {count} artist events from {provider_name} - using these results")
-                    return events
+                    logger.info(f"Got {count} artist events from {provider_name} (total available: {total}) - using these results")
+                    return events, total
                 else:
                     logger.info(f"{provider_name} returned no artist events, trying next collector...")
                     
@@ -76,4 +76,4 @@ class MultiCollector:
                 logger.info(f"Falling back to next collector...")
         
         logger.warning(f"All collectors returned empty results for artist: {query.artist}")
-        return []
+        return [], 0

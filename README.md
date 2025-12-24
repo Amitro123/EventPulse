@@ -5,6 +5,13 @@
 
 Event discovery platform for concerts and sports with affiliate monetization.
 
+## Features
+
+- **Smart Packaging**: Dynamically bundles event tickets with nearby hotel stays via Booking.com.
+- **Provider Transparency**: Clearly indicates ticket sources (Ticketmaster, Viagogo).
+- **Modern UI**: Sleek, responsive design with glassmorphism and stable layouts.
+- **Data-Driven**: Real-time event discovery with intelligent fallback mechanisms.
+
 ## Quick Setup
 
 ### 1. Install Dependencies
@@ -97,7 +104,6 @@ dev.bat
 .venv\Scripts\python.exe -m uvicorn api.main:app --reload --port 8000
 
 # Terminal 2: Frontend  
-# Terminal 2: Frontend  
 cd src/ui/frontend && npm start
 # Note: This now starts the Vite dev server (port 8080 by default)
 ```
@@ -129,12 +135,14 @@ Indicates where the event **metadata** came from:
 
 ### `ticket_provider` Field
 Indicates who **sells** the ticket, determined by priority:
-1. **Ticketmaster** - Preferred when available
+1. **Ticketmaster** - Preferred when available (URLs auto-constructed from event ID if missing)
 2. **Official Site** - Direct from venue/artist (future)
 3. **Viagogo** - Fallback option
 
+**Note:** For Ticketmaster events, if the API response doesn't include a ticket URL, the system automatically constructs a valid URL using the event ID: `https://www.ticketmaster.com/event/{id}`
+
 The frontend displays:
-- **Event cards**: "Source: Viagogo" or "Source: Ticketmaster" badge
+- **Event cards**: "Direct" button available ONLY for confirmed Ticketmaster listings.
 - **Package modal**: "Tickets via [provider]" next to Buy Tickets button
 
 ## API Endpoints
@@ -287,8 +295,8 @@ Get your Ticketmaster key from [Ticketmaster Developer Portal](https://developer
 │  React Frontend │ ──▶ │  FastAPI Backend  │ ──▶ │ Ticketmaster│
 │  (EventSearch)  │     │  (/api/events)    │     │     API     │
 └─────────────────┘     └───────────────────┘     └─────────────┘
-                               │
-                               ▼
+                                │
+                                ▼
                         ┌─────────────┐
                         │ Booking.com │
                         │ (Affiliate) │
@@ -306,4 +314,3 @@ See `railway.toml` for configuration.
 ## License
 
 MIT
-

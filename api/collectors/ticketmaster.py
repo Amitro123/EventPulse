@@ -1,9 +1,13 @@
 """Ticketmaster API collector for event discovery."""
 import httpx
-from typing import List, Optional
+import logging
+from datetime import datetime, timedelta
+from typing import List, Optional, Tuple
 from api.models.event import EventMention
 from api import config
 from api.collectors.base import EventCollector, EventSearchQuery, ArtistSearchQuery
+
+logger = logging.getLogger(__name__)
 
 
 class TicketmasterCollector(EventCollector):
@@ -19,7 +23,7 @@ class TicketmasterCollector(EventCollector):
         is_placeholder = not api_key or api_key.startswith("your_") or api_key == "test"
         
         if is_placeholder:
-            print("[INFO] Mock Mode: No valid Ticketmaster API key configured")
+            logger.info("Mock Mode: No valid Ticketmaster API key configured")
             return self._get_mock_events(query.date, query.city, query.category)
         
         params = {
@@ -36,16 +40,18 @@ class TicketmasterCollector(EventCollector):
         if query.category:
             params["classificationName"] = query.category
         
-        return await self._fetch_events(params, query.date, query.city, query.category)
+        # Call real API - return results or empty list, never mock data
+        events, _ = await self._fetch_events(params, query.date, query.city, query.category)
+        return events
 
-    async def search_by_artist(self, query: ArtistSearchQuery) -> List[EventMention]:
+    async def search_by_artist(self, query: ArtistSearchQuery) -> Tuple[List[EventMention], int]:
         """Search events by artist name using Ticketmaster Discovery API."""
         # Check if API key is missing or is a placeholder value
         api_key = config.TICKETMASTER_API_KEY
         is_placeholder = not api_key or api_key.startswith("your_") or api_key == "test"
         
         if is_placeholder:
-            print("[INFO] No valid Ticketmaster API key configured, using mock artist data")
+            logger.info("No valid Ticketmaster API key configured, using mock artist data")
             return self._get_mock_artist_events(query.artist, query.date_from)
         
         params = {
@@ -65,20 +71,47 @@ class TicketmasterCollector(EventCollector):
         elif query.date_to:
             params["localStartDateTime"] = f"*,{query.date_to}T23:59:59"
             
+        # Call real API - return results or empty list, never mock data
         return await self._fetch_events(params, query.date_from or "")
 
-    async def _fetch_events(self, params: dict, default_date: str, city_filter: str = None, category_filter: str = None) -> List[EventMention]:
+    async def resolve_event(self, name: str, city: str, date: str) -> Optional[EventMention]:
+        """
+        Try to find a specific Ticketmaster event by name, city, and exact date.
+        Used to resolve Ticketmaster links for events discovered via other providers.
+        """
+        api_key = config.TICKETMASTER_API_KEY
+        is_placeholder = not api_key or api_key.startswith("your_") or api_key == "test"
+        
+        if is_placeholder:
+            # In mock mode, check if name matches our mock Coldplay event
+            if "Coldplay" in name and "Tel Aviv" in city:
+                mock_events = self._get_mock_events(date, city)
+                return mock_events[0] if mock_events else None
+            return None
+
+        params = {
+            "apikey": config.TICKETMASTER_API_KEY,
+            "keyword": name,
+            "city": city,
+            "localStartDateTime": f"{date}T00:00:00,{date}T23:59:59",
+            "size": 1
+        }
+        
+        results, _ = await self._fetch_events(params, date, city)
+        return results[0] if results else None
+
+    async def _fetch_events(self, params: dict, default_date: str, city_filter: str = None, category_filter: str = None) -> Tuple[List[EventMention], int]:
         """Internal method to execute the HTTP request and parse results."""
         events: List[EventMention] = []
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
-                print(f"[INFO] Fetching events from Ticketmaster...")
+                logger.info("Fetching events from Ticketmaster...")
                 response = await client.get(self.base_url, params=params)
                 response.raise_for_status()
                 data = response.json()
                 
                 if "_embedded" not in data or "events" not in data["_embedded"]:
-                    return events
+                    return events, 0
                 
                 for e in data["_embedded"]["events"]:
                     # Refactored Extraction Logic
@@ -104,10 +137,19 @@ class TicketmasterCollector(EventCollector):
                     if "classifications" in e and e["classifications"]:
                          category = e["classifications"][0].get("segment", {}).get("name", "music").lower()
 
+                    # Fix: Ensure URL is present for Ticketmaster events
+                    event_url = e.get("url", "")
+                    if not event_url and "id" in e:
+                         # Fallback to constructing URL from ID
+                         event_url = f"https://www.ticketmaster.com/event/{e['id']}"
+
+                    # Determine if it has tickets (not cancelled)
+                    has_tickets = e.get("dates", {}).get("status", {}).get("code") != "cancelled"
+
                     events.append(EventMention(
                         id=e["id"],
                         text=e.get("name", "Unknown Event"),
-                        url=e.get("url", ""),
+                        url=event_url,
                         timestamp=e.get("dates", {}).get("start", {}).get("localDate", default_date),
                         venue_name=venue_name,
                         city=event_city,
@@ -121,12 +163,24 @@ class TicketmasterCollector(EventCollector):
                         venue_lng=venue_lng,
                         scores={"popularity": e.get("score", 0)},
                         raw_data=e,
-                        provider="ticketmaster"
+                        provider="ticketmaster",
+                        ticket_provider="ticketmaster",
+                        has_tickets=has_tickets
                     ))
+            except httpx.HTTPError as e:
+                logger.error(f"HTTP error fetching events from Ticketmaster: {e}", exc_info=True)
             except Exception as e:
-                print(f"[ERROR] Ticketmaster API error: {e}")
+                logger.exception(f"Unexpected error fetching events from Ticketmaster: {e}")
         
-        return events
+        # Extract total count from pagination metadata
+        total_elements = 0
+        try:
+            if "page" in data and "totalElements" in data["page"]:
+                total_elements = data["page"]["totalElements"]
+        except (KeyError, TypeError, UnboundLocalError):
+             pass
+
+        return events, total_elements
 
     def _extract_price_info(self, e: dict):
         price_range = None
@@ -169,7 +223,9 @@ class TicketmasterCollector(EventCollector):
                 price_range="$150 - $450",
                 min_price=150.0, max_price=450.0, currency="USD",
                 scores={"popularity": 0.95},
-                provider="ticketmaster"
+                provider="ticketmaster",
+                ticket_provider="ticketmaster",
+                has_tickets=True
             ),
              EventMention(
                 id="mock-2",
@@ -183,42 +239,63 @@ class TicketmasterCollector(EventCollector):
                 price_range="$120 - $380",
                 min_price=120.0, max_price=380.0, currency="USD",
                 scores={"popularity": 0.92},
-                provider="ticketmaster"
+                provider="ticketmaster",
+                ticket_provider="ticketmaster",
+                has_tickets=True
             ),
         ]
 
-    def _get_mock_artist_events(self, artist: str, date_from: Optional[str] = None) -> List[EventMention]:
-        """Return mock artist events."""
+    def _get_mock_artist_events(self, artist: str, date_from: Optional[str] = None) -> Tuple[List[EventMention], int]:
+        """Return multiple mock artist events for a more realistic testing experience."""
         base_date = date_from or "2025-06-15"
-        return [
-            EventMention(
-                id="artist-mock-1",
-                text=f"{artist} - Live in Concert",
-                url=f"https://www.ticketmaster.com/search?q={artist.replace(' ', '+')}",
-                timestamp=base_date,
-                venue_name="Madison Square Garden",
-                city="New York",
-                category="music",
-                image_url=f"https://via.placeholder.com/300x200?text={artist.replace(' ', '+')}",
-                price_range="$75 - $350",
-                min_price=75.0, max_price=350.0, currency="USD",
-                scores={"popularity": 0.90},
-                provider="ticketmaster"
-            )
+        base_dt = datetime.strptime(base_date, "%Y-%m-%d")
+        
+        # Realistic tour names for the mock results
+        tour_names = [
+            "LOOP Tour",
+            "Live in Concert",
+            "Mathematics Tour",
+            "World Tour",
+            "Summer Festival Appearance"
         ]
+        
+        # Realistic venues for the mock results
+        venues = [
+            ("Madison Square Garden", "New York"),
+            ("O2 Arena", "London"),
+            ("Stade de France", "Paris"),
+            ("Wembley Stadium", "London"),
+            ("Red Rocks Amphitheatre", "Morrison")
+        ]
+        
+        mock_events = []
+        for i in range(25):
+            tour_name = tour_names[i % len(tour_names)]
+            venue_name, city = venues[i % len(venues)]
+            # Space out the dates slightly for the mock results
+            event_date = (base_dt + timedelta(days=i*14)).strftime("%Y-%m-%d")
+            
+            mock_events.append(EventMention(
+                id=f"artist-mock-{i+1}",
+                text=f"{artist} - {tour_name}",
+                url=f"https://www.ticketmaster.com/search?q={artist.replace(' ', '+')}",
+                timestamp=event_date,
+                venue_name=venue_name,
+                city=city,
+                category="music",
+                image_url=f"https://via.placeholder.com/300x200?text={artist.replace(' ', '+')}+{i+1}",
+                price_range=f"${75 + i*10} - ${350 + i*50}",
+                min_price=float(75 + i*10), 
+                max_price=float(350 + i*50), 
+                currency="USD",
+                scores={"popularity": 0.90 - i*0.02},
+                provider="ticketmaster",
+                ticket_provider="ticketmaster",
+                has_tickets=True
+            ))
+            
+        return mock_events, len(mock_events)
 
-# Helper functions for backward compatibility (during refactor)
-_collector = TicketmasterCollector()
-
-async def collect_events(date: str, city: Optional[str] = None, category: Optional[str] = None, limit: int = 20, country_code: str = "IL", page: int = 0) -> List[EventMention]:
-    query = EventSearchQuery(date, city, category, limit, country_code, page)
-    return await _collector.search(query)
-
-async def search_by_artist(artist: str, date_from: Optional[str] = None, date_to: Optional[str] = None, country_code: str = "US", limit: int = 20, page: int = 0) -> List[EventMention]:
-    query = ArtistSearchQuery(artist, date_from, date_to, country_code, limit, page)
-    return await _collector.search_by_artist(query)
-
-def _get_mock_events(date: str, city: Optional[str] = None, category: Optional[str] = None) -> List[EventMention]:
-    return _collector._get_mock_events(date, city, category)
+# The legacy standalone helper functions (collect_events, search_by_artist, _get_mock_events)
 
 

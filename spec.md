@@ -84,10 +84,10 @@ for tickets, hotels, and flights.
 - `hotels.affiliate_url` – Booking.com deep link with affiliate ID
 
 **Ticket Provider Priority:**
-1. Ticketmaster URL (if event from Ticketmaster)
+1. Ticketmaster URL (constructed from event ID if missing in API response)
 2. Official site URL (future feature)
 3. Viagogo URL (if event from Viagogo or as fallback)
-4. null (tickets unavailable)
+4. null (tickets unavailable or event cancelled)
 
 ---
 

@@ -16,6 +16,8 @@ export interface Event {
   image_url?: string;
   url?: string; // ticket url
   provider?: string; // "viagogo" or "ticketmaster"
+  ticket_provider?: string; // "ticketmaster", "viagogo", etc.
+  has_tickets?: boolean;
 }
 
 interface EventCardProps {
@@ -24,8 +26,11 @@ interface EventCardProps {
 }
 
 const EventCard = ({ event, onViewPackage }: EventCardProps) => {
-  const formatPrice = (min?: number, max?: number, currency?: string) => {
-    if (!min || !currency) return "Price not available";
+  const formatPrice = (min?: number, max?: number, currency?: string, hasTickets?: boolean) => {
+    if (!min || !currency) {
+      if (hasTickets) return "Prices available on Ticketmaster";
+      return "Price not available";
+    }
     if (min === max) return `${currency}${min}`;
     return `${currency}${min} - ${currency}${max}`;
   };
@@ -49,14 +54,6 @@ const EventCard = ({ event, onViewPackage }: EventCardProps) => {
     <div className="group glass-card overflow-hidden transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl">
       {/* Image */}
       <div className="relative h-48 overflow-hidden">
-        {/* Source Badge */}
-        {event.provider && (
-          <div className="absolute top-2 right-2 z-10">
-            <span className="px-2 py-1 text-xs font-medium rounded-full bg-black/60 backdrop-blur-sm text-white border border-white/20">
-              Source: {event.provider === 'viagogo' ? 'Viagogo' : 'Ticketmaster'}
-            </span>
-          </div>
-        )}
         <img
           src={event.image_url || "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&q=80"}
           alt={event.text}
@@ -95,35 +92,44 @@ const EventCard = ({ event, onViewPackage }: EventCardProps) => {
           </div>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-border/50 flex items-center justify-between">
-          <span className="text-sm font-medium text-foreground/80">
-            {formatPrice(event.min_price, event.max_price, event.currency)}
-          </span>
-          <Button
-            variant="gradient"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewPackage(event.id);
-            }}
-          >
-            <Package className="w-4 h-4 mr-2" />
-            View Package
-          </Button>
-          {event.url && (
+        <div className="mt-4 pt-4 border-t border-border/50 space-y-3">
+          {/* Price Line - Fixed height and font size */}
+          <div className="h-6 flex items-center">
+            <span className="text-sm font-medium text-foreground/80">
+              {formatPrice(event.min_price, event.max_price, event.currency, event.has_tickets)}
+            </span>
+          </div>
+
+          {/* Buttons Row */}
+          <div className="flex items-center gap-2">
             <Button
-              variant="outline"
+              variant="gradient"
               size="sm"
-              asChild
-              onClick={(e) => e.stopPropagation()}
-              className="hidden sm:inline-flex"
+              className="flex-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewPackage(event.id);
+              }}
             >
-              <a href={event.url || "#"} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="w-4 h-4 mr-2" />
-                Direct
-              </a>
+              <Package className="w-4 h-4 mr-2" />
+              View Package
             </Button>
-          )}
+
+            {event.ticket_provider === 'ticketmaster' && event.url && event.url.toLowerCase().includes('ticketmaster') && (
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                onClick={(e) => e.stopPropagation()}
+                className="flex-1"
+              >
+                <a href={event.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Direct
+                </a>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>

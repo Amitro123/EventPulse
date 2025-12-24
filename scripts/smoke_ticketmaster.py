@@ -7,7 +7,7 @@ from datetime import datetime
 # Allow importing from parent directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from api.collectors.ticketmaster import collect_events
+from api.collectors.ticketmaster import TicketmasterCollector, EventSearchQuery
 from api import config
 
 async def main():
@@ -27,12 +27,14 @@ async def main():
     print("-" * 30)
     
     try:
-        events = await collect_events(
+        collector = TicketmasterCollector()
+        query = EventSearchQuery(
             date=args.date,
             country_code=args.country,
             city=args.city,
             limit=5
         )
+        events = await collector.search(query)
         
         print(f"\nFound {len(events)} events:")
         for i, e in enumerate(events[:5]):
